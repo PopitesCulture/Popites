@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Popites – collectionne la pop culture</title>
+<meta name="description" content="Popites, le jeu de cartes gratuit et open source pour collectionner la pop culture : séries, mangas, musique et personnages.">
+<meta name="theme-color" content="#13111b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Popites">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Figtree:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="bar">
+      <div class="brand">Pop<b>ites</b></div>
+      <div class="tagline">collectionne la pop culture</div>
+      <button class="btn sm" id="install" hidden>Installer l'appli</button>
+      <div class="total" id="total"></div>
+    </div>
+    <nav aria-label="Sections">
+      <button class="tab" data-v="album" id="tab-album">Album</button>
+      <button class="tab" data-v="quiz" id="tab-quiz">Quiz du jour</button>
+      <button class="tab" data-v="packs" id="tab-packs">Boosters</button>
+      <button class="tab" data-v="profile" id="tab-profile">Profil</button>
+      <button class="tab" data-v="shop" id="tab-shop">Soutenir</button>
+      <button class="tab" data-v="poll" id="tab-poll">Sondage</button>
+      <button class="tab" data-v="info" id="tab-info">Infos</button>
+    </nav>
+  </div>
+</header>
+<main class="wrap" id="view"></main>
+<div class="wrap"><footer>
+  <span>Version de test · données Wikidata et Wikipédia</span>
+  <a href="#" data-legal="contact">Contact</a>
+  <a href="#" data-legal="mentions">Mentions légales</a>
+  <a href="#" data-legal="privacy">Confidentialité</a>
+  <a href="#" data-legal="licence">Licence MIT</a>
+  <span class="sp"></span>
+  <button class="btn ghost sm" id="t-quiz">Test : recharger quiz et boosters gratuits</button>
+  <button class="btn ghost sm" id="t-reset">Test : tout remettre à zéro</button>
+</footer></div>
+<div class="modal" id="modal" hidden></div>
+<script src="collections.js"></script>
+<script src="questions.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

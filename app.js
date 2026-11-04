@@ -1,0 +1,741 @@
+/* ---------- Métriques ---------- */
+const METRICS = {
+  imdb:   {fmt:v=>`${v.toFixed(1).replace(".",",")}/10 sur IMDb`, unit:v=>v.toString().replace(".",","), name:"Note IMDb"},
+  sales:  {fmt:v=>`${v} M d'ex. vendus`, unit:v=>v+" M", name:"Ventes"},
+  spotify:{fmt:v=>`${v} M d'auditeurs`, unit:v=>v+" M", name:"Auditeurs mensuels Spotify"},
+  google: {fmt:v=>`${v}/100 popularité`, unit:v=>v, name:"Indice de recherches Google"},
+  views:  {fmt:v=>`${v.toLocaleString("fr-FR")} vues`, unit:v=>v.toLocaleString("fr-FR"), name:"Vues Wikipédia FR sur 12 mois"},
+};
+const RAR = {L:"Légendaire",E:"Épique",R:"Rare",PU:"Peu commune",C:"Commune"};
+const ORDER = ["C","PU","R","E","L"];
+const DROP = {C:45,PU:28,R:16,E:8,L:3};
+const PACK_SIZE = 10;
+
+/* ---------- Badges : un par sous-genre complété ---------- */
+const BADGES = {
+  "series-med":["🩺","Stéthoscope"], "series-pol":["🔫","Pistolet"], "series-fan":["🐉","Dragon"], "series-com":["🎭","Masques"],
+  "manga-shonen":["⚡","Éclair"], "manga-seinen":["🗡️","Lame"], "manga-shojo":["🌸","Fleur de cerisier"], "manga-sport":["🏀","Ballon"],
+  "musique-rapfr":["🎤","Micro"], "musique-pop":["💿","Disque"], "musique-rock":["🤘","Main rock"], "musique-kpop":["🫰","Cœur coréen"],
+  "perso-disney":["🏰","Château"], "perso-jv":["🎮","Manette"], "perso-anim":["📺","Télé"], "perso-bd":["💬","Bulle"],
+};
+
+
+/* cartes générées (collections.js) : rareté calculée au rang dans le sous-genre, id = identifiant Wikidata (stable d'une génération à l'autre) */
+const RANK_SHARE = {L:8,E:15,R:22,PU:25,C:30};
+COLLECTIONS.forEach(c=>{
+  c.all=[];
+  c.subs.forEach(s=>{
+    s.cards=s.cards.map(([title,sub,v,r,qid,pal,deco,blurb],i)=>({id:qid, n:i+1, title, sub, v, r, pal, deco, blurb, s}));
+    c.all.push(...s.cards);
+  });
+  c.quiz=QUESTIONS[c.id]||[];
+});
+const colById = id => COLLECTIONS.find(c=>c.id===id);
+
+/* ---------- État (sauvegardé dans ce navigateur) ---------- */
+const KEY="culturedeck-v2";
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`};
+function fresh(){return {owned:{},packs:COLLECTIONS.map(c=>({c:c.id,g:"",src:"Bienvenue"})),claimed:{},quizDate:today(),quizDone:{},
+  free:{stock:2,t:Date.now()},stats:{opened:0,quizWon:0},pseudo:"",
+  pid:Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4),friends:[]}}
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY))||fresh()}catch(e){S=fresh()}
+S.claimed=S.claimed||{};
+S.free=S.free||{stock:2,t:Date.now()};
+S.stats=S.stats||{opened:0,quizWon:0};
+/* identifiant anonyme du profil (pour que la fiche d'un ami se mette à jour au lieu d'être dupliquée) et liste d'amis */
+S.pid=S.pid||Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+S.friends=Array.isArray(S.friends)?S.friends:[];
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+/* quiz du jour : un par catégorie, remis à zéro à minuit */
+if(S.quizDate!==today()||!S.quizDone){S.quizDate=today();S.quizDone={}}
+delete S.quizLeft;
+
+/* booster gratuit : un toutes les 20 min (3 par heure), 10 en stock maximum ; le compteur s'arrête quand le stock est plein */
+const FREE_EVERY=20*60*1000, FREE_MAX=10;
+function tickFree(){
+  const f=S.free, now=Date.now();
+  if(f.stock>=FREE_MAX){f.t=now;return false}
+  const n=Math.floor((now-f.t)/FREE_EVERY); if(n<=0) return false;
+  f.stock=Math.min(FREE_MAX,f.stock+n);
+  f.t=f.stock>=FREE_MAX?now:f.t+n*FREE_EVERY;
+  return true;
+}
+const freeNext=()=>S.free.stock>=FREE_MAX?0:FREE_EVERY-(Date.now()-S.free.t);
+
+/* quiz express : 3 par jour, 5 questions difficiles, 3 bonnes réponses pour débloquer un booster tout de suite */
+const EXPRESS_PER_DAY=3, EXPRESS_QS=5, EXPRESS_NEED=4;
+function expressLeft(){if(!S.express||S.express.day!==today())S.express={day:today(),left:EXPRESS_PER_DAY};return S.express.left}
+tickFree(); save();
+
+/* gratuit, express, boutique : la catégorie est tirée au sort à l'ouverture */
+const randomCol=()=>COLLECTIONS[Math.floor(Math.random()*COLLECTIONS.length)];
+
+let view=S.packs.length&&!Object.keys(S.owned).length?"packs":"album", curCol=COLLECTIONS[0].id, quiz=null;
+
+/* ---------- Utilitaires ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+function hash(s){let h=0;for(const ch of s)h=(h*31+ch.charCodeAt(0))>>>0;return h}
+const STOP=new Set(["the","le","la","les","de","du","of","l","d","a","no","ni","et","&"]);
+function mono(t){
+  const w=t.replace(/[^\p{L}\p{N}\s]/gu," ").split(/\s+/).filter(x=>x&&!STOP.has(x.toLowerCase()));
+  if(!w.length) return t.slice(0,2).toUpperCase();
+  if(w.length===1) return w[0].slice(0,2).toUpperCase();
+  return w.slice(0,3).map(x=>x[0]).join("").toUpperCase();
+}
+const has=k=>!!S.owned[k.id];
+const ownedIn=list=>list.filter(has).length;
+const dupesIn=list=>list.reduce((s,k)=>s+Math.max(0,(S.owned[k.id]||0)-1),0);
+const pad=(n,of=99)=>String(n).padStart(Math.max(2,String(of).length),"0");
+
+/* motifs des cartes pleines : formes simples en surimpression */
+const svg=(inner,w=40,h=40)=>`url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}'>${inner}</svg>`)}")`;
+const W="fill='white' fill-opacity='.28'", WS="fill='none' stroke='white' stroke-opacity='.3' stroke-width='2.2'";
+const DECO={
+  dots:["radial-gradient(circle,rgba(255,255,255,.3) 18%,transparent 21%)","10cqw 10cqw"],
+  bubbles:[svg(`<circle cx='12' cy='14' r='7' ${WS}/><circle cx='31' cy='31' r='4' ${WS}/><circle cx='32' cy='8' r='2.5' ${W}/>`),"20cqw 20cqw"],
+  stars:[svg(`<path d='M20 6l3.5 9 9.5.5-7.4 6 2.6 9.2L20 25.6l-8.2 5.1 2.6-9.2-7.4-6 9.5-.5z' ${W}/>`),"16cqw 16cqw"],
+  sparkles:[svg(`<path d='M14 4Q15.5 13 24 14Q15.5 15 14 24Q12.5 15 4 14Q12.5 13 14 4z' ${W}/><path d='M31 24Q31.8 29 36 30Q31.8 31 31 36Q30.2 31 26 30Q30.2 29 31 24z' ${W}/>`),"18cqw 18cqw"],
+  flakes:[svg(`<g ${WS}><path d='M20 7v26M8.7 13.5l22.6 13M8.7 26.5l22.6-13'/></g>`),"16cqw 16cqw"],
+  hex:[svg(`<path d='M11 2h18l10 17-10 17H11L1 19z' ${WS}/>`,40,38),"15cqw 14.25cqw"],
+  waves:[svg(`<path d='M0 20Q10 10 20 20T40 20' ${WS}/>`),"14cqw 9cqw"],
+  zigzag:[svg(`<path d='M0 26L10 14L20 26L30 14L40 26' ${WS}/>`),"14cqw 10cqw"],
+  stripes:["repeating-linear-gradient(135deg,rgba(255,255,255,.16) 0 3cqw,transparent 3cqw 9cqw)","auto"],
+  checks:["conic-gradient(rgba(255,255,255,.22) 25%,transparent 0 50%,rgba(255,255,255,.22) 0 75%,transparent 0)","10cqw 10cqw"],
+  sun:["repeating-conic-gradient(from 0deg at 100% 0%,rgba(255,255,255,.2) 0 4deg,transparent 4deg 10deg)","auto"],
+};
+function lum(hex){const n=parseInt(hex.slice(1),16),c=[n>>16,(n>>8)&255,n&255].map(v=>{v/=255;return v<=.03928?v/12.92:((v+.055)/1.055)**2.4});return .2126*c[0]+.7152*c[1]+.0722*c[2];}
+function fullCardHTML(c,k,opts){
+  const cnt=S.owned[k.id]||0, [p0,p1,p2]=k.pal, d=DECO[k.deco]||DECO.dots;
+  const light=(lum(p0)+lum(p1))/2>.42;
+  return `<div class="card full r-${k.r}" aria-label="${esc(k.title)}, ${RAR[k.r]}">
+    <div class="face" style="--g:linear-gradient(165deg,${p0} 0%,${p1} 62%,${p2} 100%);--deco:${d[0].replace(/"/g,"&quot;")};--ds:${d[1]};--ink:${light?"#1a1420":"#ffffff"};--scrim:${light?"rgba(255,255,255,.42)":"rgba(10,6,20,.38)"}">
+      <div class="top"><span>${k.s.short}</span><span>${pad(k.n,k.s.cards.length)}/${k.s.cards.length}</span></div>
+      <div class="fname">${esc(k.title)}</div>
+      <div class="fsub">${esc(k.sub)}</div>
+      <div class="blurb"><p>${esc(k.blurb)}</p></div>
+      <div class="fstat"><span>${METRICS[c.metric].fmt(k.v)}</span><span class="chip">${RAR[k.r]}</span></div>
+    </div>
+    ${opts.count!==false&&cnt>1?`<span class="count">×${cnt}</span>`:""}
+    ${opts.isNew?`<span class="new">NOUVELLE</span>`:""}
+  </div>`;
+}
+function cardHTML(c,k,opts={}){
+  if(c.full) return fullCardHTML(c,k,opts);
+  const cnt=S.owned[k.id]||0;
+  return `<div class="card r-${k.r}" style="--h:${hash(k.id)%360}" aria-label="${esc(k.title)}, ${RAR[k.r]}">
+    <div class="face">
+      <div class="top"><span>${k.s.short}</span><span>${pad(k.n,k.s.cards.length)}/${k.s.cards.length}</span></div>
+      <div class="art"><span class="mono">${esc(mono(k.title))}</span></div>
+      <div class="name">${esc(k.title)}</div>
+      <div class="sub">${esc(k.sub)}</div>
+      <div class="stat"><span>${METRICS[c.metric].fmt(k.v)}</span><span class="chip">${RAR[k.r]}</span></div>
+    </div>
+    ${opts.count!==false&&cnt>1?`<span class="count">×${cnt}</span>`:""}
+    ${opts.isNew?`<span class="new">NOUVELLE</span>`:""}
+  </div>`;
+}
+
+/* ---------- Vues ---------- */
+function updateTabs(){
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-current",t.dataset.v===view));
+  const nPacks=S.packs.length+S.free.stock;
+  $("#tab-packs").innerHTML=`Boosters${nPacks?`<span class="badge">${nPacks}</span>`:""}`;
+  const qLeft=COLLECTIONS.filter(c=>!S.quizDone[c.id]).length;
+  $("#tab-quiz").innerHTML=`Quiz du jour${qLeft?`<span class="badge">${qLeft}</span>`:""}`;
+  const all=COLLECTIONS.reduce((s,c)=>s+c.all.length,0), got=COLLECTIONS.reduce((s,c)=>s+ownedIn(c.all),0);
+  $("#total").innerHTML=`<strong>${got}</strong> / ${all} cartes`;
+}
+function render(){updateTabs();({album:renderAlbum,quiz:renderQuiz,packs:renderPacks,profile:renderProfile,shop:renderShop,poll:renderPoll,info:renderInfo,legal:renderLegal})[view]();}
+
+function renderAlbum(){
+  const c=colById(curCol), d=dupesIn(c.all);
+  $("#view").innerHTML=`
+    <div class="kicker">Album</div>
+    <h1>Tes collections</h1>
+    <p class="lede">Quatre grandes catégories, chacune découpée en sous-genres. Complète un sous-genre pour gagner son badge et un booster avec une carte épique garantie.</p>
+    <div class="colpick">${COLLECTIONS.map(x=>{const o=ownedIn(x.all),p=Math.round(o/x.all.length*100);
+      return `<button class="colbtn" id="col-${x.id}" data-col="${x.id}" aria-pressed="${x.id===curCol}">
+        <span class="kicker">${x.subs.length} sous-genres</span><span class="nm">${esc(x.name)}</span>
+        <span class="prog"><i style="width:${p}%"></i></span>
+        <span class="meta"><span>${o}/${x.all.length}</span><span>${p===100?"Complète !":p+" %"}</span></span></button>`}).join("")}</div>
+    <div class="colhead">
+      <div><h2>${esc(c.name)}</h2><p class="lede">${esc(c.desc)}</p>
+        <div class="jump">${c.subs.map(s=>{const o=ownedIn(s.cards);return `<a href="#sub-${c.id}-${s.id}" class="${o===s.cards.length?"done":""}">${esc(s.name)}<span>${o}/${s.cards.length}</span></a>`}).join("")}</div></div>
+      <div class="dupes"><span>Doublons : <strong>${d}</strong></span>
+        <button class="btn sm" id="swap" ${d<5?"disabled":""}>Échanger 5 doublons contre un booster</button></div>
+    </div>
+    ${c.subs.map(s=>{
+      const o=ownedIn(s.cards), done=o===s.cards.length, key=`${c.id}-${s.id}`, claimed=S.claimed[key];
+      return `<section class="subsec" id="sub-${key}">
+        <div class="subhead">
+          <div class="l"><h3>${esc(s.name)}</h3><small>${o}/${s.cards.length} cartes · badge ${BADGES[key][0]} ${done?"obtenu":"à gagner"}</small></div>
+          <div class="reward">${claimed?`<span class="pill got">Récompense récupérée</span>`:
+            done?`<button class="btn sm" data-claim="${key}">Récupérer le booster épique</button>`:
+            `<span class="pill">Récompense : booster épique garanti</span>`}</div>
+        </div>
+        <div class="grid">${s.cards.map(k=>has(k)?cardHTML(c,k):
+          `<div class="missing" aria-label="Carte ${k.n} manquante"><span class="q">?</span><span class="n">${pad(k.n)}</span></div>`).join("")}</div>
+      </section>`}).join("")}`;
+  document.querySelectorAll(".colbtn").forEach(b=>b.onclick=()=>{curCol=b.dataset.col;render()});
+  document.querySelectorAll("[data-claim]").forEach(b=>b.onclick=()=>{
+    S.claimed[b.dataset.claim]=true;
+    const s=c.subs.find(x=>`${c.id}-${x.id}`===b.dataset.claim);
+    S.packs.push({c:c.id,g:"E",src:s.name+" complète"});save();render();
+  });
+  $("#swap").onclick=()=>{
+    let need=5;
+    while(need>0){const k=c.all.filter(k=>(S.owned[k.id]||0)>1).sort((a,b)=>S.owned[b.id]-S.owned[a.id])[0];if(!k)break;S.owned[k.id]--;need--}
+    S.packs.push({c:c.id,g:"",src:"Échange"});save();render();
+  };
+}
+
+function renderQuiz(){
+  if(quiz) return renderQuestion();
+  $("#view").innerHTML=`
+    <div class="quizhead">
+      <div><div class="kicker">Quiz du jour</div><h1>Gagne un booster thématique</h1>
+      <p class="lede">Un quiz par catégorie et par jour. 5 questions de niveau moyen à difficile : avec 3 bonnes réponses ou plus, tu gagnes un booster de la catégorie avec au moins une carte rare garantie.</p></div>
+      <div><div class="kicker" style="margin-bottom:6px">Quiz restants aujourd'hui</div><div class="tokens">${COLLECTIONS.map(c=>`<i class="${S.quizDone[c.id]?"":"on"}" title="${esc(c.name)}"></i>`).join("")}</div></div>
+    </div>
+    <div class="themes">${COLLECTIONS.map(c=>{const done=S.quizDone[c.id];return `
+      <button class="theme" id="th-${c.id}" data-col="${c.id}" ${done?"disabled":""}>
+        <span class="kicker">${ownedIn(c.all)}/${c.all.length} cartes</span>
+        <span class="t">${esc(c.name)}</span>
+        <span class="d">${done?"Déjà fait aujourd'hui, reviens demain":"Lancer le quiz"}</span>
+      </button>`}).join("")}</div>
+    <div class="rules"><span>Un quiz commencé est décompté, même abandonné.</span><span>Les quiz se rechargent à minuit.</span></div>`;
+  document.querySelectorAll(".theme").forEach(b=>b.onclick=()=>{
+    const c=colById(b.dataset.col);
+    if(S.quizDone[c.id]) return;
+    S.quizDone[c.id]=true;save();
+    startQuiz(c,"daily");
+  });
+}
+/* ---------- Signalement d'une question ---------- */
+/* où arrivent les signalements : le lien du formulaire Framaforms (champ « Signalement » prérempli via [current-page:query:signalement]),
+   ou une adresse « mailto:… ». Vide : gardé seulement sur l'appareil. Mode d'emploi : generation\formulaire-signalement.md */
+const REPORT_TO="https://framaforms.org/popites-signaler-une-question-1793529699";
+const REPORT_WHY=[["fausse","La bonne réponse est fausse"],["plusieurs","Plusieurs réponses sont justes"],["confuse","La question est mal écrite ou pas claire"],["autre","Autre problème"]];
+S.reported=S.reported||{};
+function reportText(c,q,why,note){
+  return `Signalement Popites — question ${q.id}\nCatégorie : ${c.name}\nQuestion : ${q.q}\nRéponse donnée comme bonne : ${q.right}\nChoix proposés : ${q.opts.join(" / ")}\nProblème : ${REPORT_WHY.find(w=>w[0]===why)[1]}${note?`\nPrécision : ${note}`:""}`;
+}
+function openReport(c,q){
+  const box=$("#report"); box.hidden=false; $("#q-report").hidden=true;
+  box.innerHTML=`<div class="kicker">Signaler cette question</div>
+    <div class="choices">${REPORT_WHY.map(([k,l],i)=>`<label class="choice"><input type="radio" name="why" value="${k}" ${i?"":"checked"}><span>${l}</span></label>`).join("")}</div>
+    <input type="text" id="r-note" maxlength="200" placeholder="Une précision ? (facultatif, ex. la vraie réponse)" aria-label="Précision">
+    <div class="row"><button class="btn sm" id="r-send">Envoyer</button><button class="btn ghost sm" id="r-cancel">Annuler</button><span class="note" id="r-msg"></span></div>`;
+  $("#r-cancel").onclick=()=>{box.hidden=true;$("#q-report").hidden=false};
+  $("#r-send").onclick=async()=>{
+    const why=box.querySelector('input[name=why]:checked').value, note=$("#r-note").value.trim().slice(0,200);
+    const text=reportText(c,q,why,note);
+    S.reported=S.reported||{}; S.reported[q.id]=why; save();   // cette question ne sera plus posée sur cet appareil
+    let msg="Merci ! Cette question ne te sera plus posée.";
+    if(REPORT_TO.startsWith("mailto:")){
+      location.href=`${REPORT_TO}?subject=${encodeURIComponent("Popites : signalement "+q.id)}&body=${encodeURIComponent(text)}`;
+      msg+=" Ton application mail s'ouvre avec le signalement prêt à envoyer.";
+    }else if(REPORT_TO){
+      /* Framaforms préremplit le champ dont la valeur par défaut est [current-page:query:signalement] ; on copie aussi le texte au cas où */
+      try{await navigator.clipboard.writeText(text);msg+=" Le formulaire s'ouvre avec ton signalement (il est aussi copié, au cas où : colle-le s'il n'apparaît pas)."}catch(e){msg+=" Le formulaire s'ouvre avec ton signalement. S'il n'apparaît pas, indique le code "+q.id+"."}
+      window.open(REPORT_TO+(REPORT_TO.includes("?")?"&":"?")+"signalement="+encodeURIComponent(text),"_blank","noopener");
+    }
+    box.innerHTML=`<p class="note">${esc(msg)}</p>`;
+  };
+}
+
+/* le quiz express donne 2 essais ; le second reprend la même catégorie avec d'autres questions */
+function startQuiz(c,mode,attempt=1,used=[]){
+  /* quiz du jour : niveaux moyen et difficile ; quiz express : difficile et très difficile ; jamais une question que le joueur a signalée */
+  const ex=mode==="express", lv=ex?[1,2]:[0,1];
+  const pool=shuffle(c.quiz.filter(x=>lv.includes(x[2])&&!used.includes(x[0])&&!(S.reported||{})[x[3]]));
+  const qs=pool.slice(0,ex?EXPRESS_QS:5);
+  quiz={c:c.id,mode,attempt,used:[...used,...qs.map(x=>x[0])],need:ex?EXPRESS_NEED:3,qs:qs.map(([q,a,,id])=>({q,id,right:a[0],opts:shuffle(a)})),i:0,res:[]};
+  view="quiz";render();window.scrollTo(0,0);
+}
+
+function renderQuestion(){
+  const c=colById(quiz.c), total=quiz.qs.length, ex=quiz.mode==="express", label=ex?"Quiz express":"Quiz";
+  if(quiz.i>=total){
+    const score=quiz.res.filter(Boolean).length, win=score>=quiz.need;
+    if(win&&!quiz.rewarded){S.packs.push(ex?{c:null,g:"",src:"Quiz express"}:{c:c.id,g:"R",src:"Quiz"});S.stats.quizWon++;quiz.rewarded=true;save();updateTabs();}
+    const xl=expressLeft(), retry=ex&&!win&&quiz.attempt===1;
+    const left=COLLECTIONS.filter(x=>!S.quizDone[x.id]).length;
+    const lose=ex?(retry?`Il fallait ${EXPRESS_NEED} bonnes réponses. Il te reste une deuxième chance sur ce quiz, avec d'autres questions.`
+        :`Il fallait ${EXPRESS_NEED} bonnes réponses, et c'était ta deuxième chance. ${xl?`Encore ${xl} quiz express aujourd'hui.`:"Nouveaux quiz express demain."}`)
+      :`Il fallait 3 bonnes réponses. ${left?`Il te reste ${left} quiz aujourd'hui, dans d'autres catégories.`:"Nouveaux quiz demain."}`;
+    $("#view").innerHTML=`<div class="qbox"><div class="result">
+      <div class="kicker">${label} ${esc(c.name)}${ex?` · essai ${quiz.attempt}/2`:""}</div>
+      <div class="score">${score}/${total}</div>
+      <h2>${win?(score===total?"Sans faute !":"Booster gagné"):"Pas cette fois"}</h2>
+      <p class="lede">${win?(ex?"Ton booster surprise est débloqué, tout de suite.":"Un booster "+esc(c.name)+" avec une carte rare garantie t'attend."):lose}</p>
+      <div class="mactions">${win?`<button class="btn" id="q-open">Ouvrir le booster</button>`:""}${retry?`<button class="btn" id="q-retry">Deuxième chance</button>`:""}<button class="btn ghost" id="q-back">${ex?"Retour aux boosters":"Retour aux quiz"}</button></div>
+    </div></div>`;
+    $("#q-back").onclick=()=>{quiz=null;if(ex)view="packs";render()};
+    if(retry) $("#q-retry").onclick=()=>startQuiz(c,"express",2,quiz.used);
+    if(win) $("#q-open").onclick=()=>{quiz=null;view="packs";render();openPack(S.packs.length-1)};
+    return;
+  }
+  const q=quiz.qs[quiz.i];
+  $("#view").innerHTML=`<div class="qbox">
+    <div class="qmeta"><span>${label} ${esc(c.name)}${ex?` · essai ${quiz.attempt}/2 · ${EXPRESS_NEED} bonnes réponses pour gagner`:""}</span><span>Question ${quiz.i+1}/${total}</span></div>
+    <div class="dots">${quiz.qs.map((_,i)=>`<i class="${i<quiz.res.length?(quiz.res[i]?"ok":"ko"):i===quiz.i?"cur":""}"></i>`).join("")}</div>
+    <div class="qtext">${esc(q.q)}</div>
+    <div class="opts">${q.opts.map((o,i)=>`<button class="opt" id="opt-${i}" data-o="${esc(o)}">${esc(o)}</button>`).join("")}</div>
+    <div class="mactions" id="next" hidden><button class="btn" id="q-next">${quiz.i===total-1?"Voir le résultat":"Question suivante"}</button><button class="btn ghost sm" id="q-report">Signaler un problème</button></div>
+    <div class="report" id="report" hidden></div>
+  </div>`;
+  $("#q-report").onclick=()=>openReport(c,q);
+  document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{
+    const ok=b.dataset.o===q.right; quiz.res.push(ok);
+    document.querySelectorAll(".opt").forEach(x=>{x.disabled=true;if(x.dataset.o===q.right)x.classList.add("right")});
+    if(!ok)b.classList.add("wrong");
+    $("#next").hidden=false;$("#q-next").focus();
+  });
+  $("#q-next").onclick=()=>{quiz.i++;render()};
+}
+
+function renderPacks(){
+  const st=S.free.stock, xl=expressLeft();
+  $("#view").innerHTML=`<div class="kicker">Boosters</div><h1>À ouvrir</h1>
+    <p class="lede">${PACK_SIZE} cartes par booster, tirées dans toute la catégorie. Quiz réussi : une rare garantie. Sous-genre complété : une épique garantie.</p>
+    <div class="freebar">
+      <section class="panel">
+        <h3>Boosters gratuits</h3>
+        <div class="stock" aria-label="${st} sur ${FREE_MAX} en stock">${Array.from({length:FREE_MAX},(_,i)=>`<i class="${i<st?"on":""}"></i>`).join("")}</div>
+        <div class="timer" id="free-timer"></div>
+        <p class="note">Catégorie tirée au sort à l'ouverture.</p>
+        <div class="row"><button class="btn" id="free-open" ${st?"":"disabled"}>Ouvrir un booster surprise</button></div>
+      </section>
+      <section class="panel">
+        <h3>Quiz express</h3>
+        <p>Pas envie d'attendre ? ${EXPRESS_QS} questions difficiles sur une catégorie au hasard. ${EXPRESS_NEED} bonnes réponses et un booster surprise se débloque tout de suite. Si tu rates, tu as une deuxième chance avec d'autres questions.</p>
+        <div class="row"><span class="note">Aujourd'hui</span><div class="tokens">${Array.from({length:EXPRESS_PER_DAY},(_,i)=>`<i class="${i<xl?"on":""}"></i>`).join("")}</div></div>
+        <div class="row"><button class="btn ghost" id="express-go" ${xl?"":"disabled"}>${xl?"Lancer un quiz express":"Plus de quiz express aujourd'hui"}</button></div>
+      </section>
+    </div>
+    <h2 style="margin-top:28px">Boosters gagnés</h2>
+    ${S.packs.length?`<div class="packs">${S.packs.map((p,i)=>{const c=p.c?colById(p.c):{name:"Surprise",hue:45};
+      return `<button class="pack" id="pack-${i}" data-i="${i}" style="--h:${c.hue}" aria-label="Ouvrir le booster ${esc(c.name)}">
+        <span class="in"><span class="ps">${esc(p.src)}</span><span class="pt">${esc(c.name)}</span>
+        ${p.g==="E"?`<span class="gr E">Épique garantie</span>`:p.g==="R"?`<span class="gr">Rare garantie</span>`:`<span class="ps">${PACK_SIZE} cartes</span>`}</span></button>`}).join("")}</div>`
+    :`<div class="empty">Aucun booster gagné en attente. Fais un quiz du jour pour en gagner un.</div>`}`;
+  document.querySelectorAll(".pack").forEach(b=>b.onclick=()=>openPack(+b.dataset.i));
+  $("#free-open").onclick=()=>{
+    tickFree(); if(!S.free.stock) return;
+    S.free.stock--; S.packs.push({c:null,g:"",src:"Gratuit"}); save(); openPack(S.packs.length-1);
+  };
+  $("#express-go").onclick=()=>{
+    if(!expressLeft()) return;
+    S.express.left--; save(); startQuiz(randomCol(),"express");
+  };
+  showTimer();
+}
+const fmtDur=ms=>{const s=Math.ceil(ms/1000),m=Math.floor(s/60);return `${m}:${String(s%60).padStart(2,"0")}`};
+function showTimer(){
+  const el=$("#free-timer"); if(!el) return;
+  el.innerHTML=S.free.stock>=FREE_MAX?`Stock plein (${FREE_MAX}). Ouvre-en un pour relancer le compteur.`
+    :`<strong>${S.free.stock}</strong>/${FREE_MAX} en stock · prochain dans <strong>${fmtDur(freeNext())}</strong>`;
+}
+
+/* ---------- Tirage & ouverture ---------- */
+function pickTier(allowed){
+  const tot=allowed.reduce((s,t)=>s+DROP[t],0);let x=Math.random()*tot;
+  for(const t of allowed){x-=DROP[t];if(x<0)return t}return allowed[allowed.length-1];
+}
+function draw(c,g){
+  const tiers=ORDER.filter(t=>c.all.some(k=>k.r===t));
+  const min={R:["R","E","L"],E:["E","L"]}[g];
+  const out=[];
+  for(let i=0;i<PACK_SIZE;i++){
+    const allowed=(min&&i===PACK_SIZE-1)?tiers.filter(t=>min.includes(t)):tiers;
+    const t=pickTier(allowed), pool=c.all.filter(k=>k.r===t);
+    out.push(pool[Math.floor(Math.random()*pool.length)]);
+  }
+  return out.sort((a,b)=>ORDER.indexOf(a.r)-ORDER.indexOf(b.r));
+}
+function openPack(i){
+  const p=S.packs[i]; if(!p) return;
+  if(!p.c) p.c=randomCol().id;
+  const c=colById(p.c), cards=draw(c,p.g);
+  const seen=new Set(); const isNew=cards.map(k=>{const n=!S.owned[k.id]&&!seen.has(k.id);seen.add(k.id);return n});
+  cards.forEach(k=>S.owned[k.id]=(S.owned[k.id]||0)+1);
+  S.packs.splice(i,1); S.stats.opened++; save();
+  const completed=c.subs.filter(s=>!S.claimed[`${c.id}-${s.id}`]&&ownedIn(s.cards)===s.cards.length&&cards.some(k=>k.s===s));
+  const m=$("#modal"); m.hidden=false;
+  m.innerHTML=`<div class="mbox">
+    <div><div class="kicker">Booster ${esc(p.src)}</div><h1>${esc(c.name)}</h1><p class="lede" style="margin-inline:auto">Touche les cartes pour les retourner.</p></div>
+    <div class="reveal">${cards.map((k,j)=>`<button class="flip r-glow-${k.r}" id="flip-${j}" aria-label="Retourner la carte ${j+1}">
+      <span class="inner"><span class="back">CD</span>${cardHTML(c,k,{count:false,isNew:isNew[j]})}</span></button>`).join("")}</div>
+    ${completed.length?`<div class="toast">Sous-genre complété : ${completed.map(s=>`${BADGES[c.id+"-"+s.id][0]} ${esc(s.name)}`).join(", ")}. Nouveau badge dans ton profil, et ton booster épique t'attend dans l'album.</div>`:""}
+    <div class="mactions"><button class="btn ghost" id="m-all">Tout retourner</button><button class="btn" id="m-close">Voir l'album</button></div>
+  </div>`;
+  m.querySelectorAll(".flip").forEach(f=>f.onclick=()=>f.classList.add("on"));
+  $("#m-all").onclick=()=>m.querySelectorAll(".flip").forEach((f,j)=>setTimeout(()=>f.classList.add("on"),j*140));
+  $("#m-close").onclick=()=>{m.hidden=true;m.innerHTML="";curCol=c.id;view="album";render();window.scrollTo(0,0)};
+  render();
+}
+
+/* ---------- Soutenir : dons + boutique plafonnée ---------- */
+const SHOP_ENABLED=false;      // pas de boosters payants au lancement : dons seulement (à rouvrir s'il y a de la demande)
+const SHOP_LIMIT=5;           // boosters achetables max par semaine (lundi → dimanche)…
+const SHOP_MONTH=10;           // …et par mois civil, soit 20 € au plus
+const PRICE=2;                 // euros par booster
+const SHOP_PERIOD="semaine";
+function weekKey(){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`}
+function monthKey(){const d=new Date();return `${d.getFullYear()}-${d.getMonth()+1}`}
+function shopState(){
+  if(!S.shop||S.shop.week!==weekKey())S.shop={week:weekKey(),bought:0,month:S.shop?.month,mBought:S.shop?.mBought||0};
+  if(S.shop.month!==monthKey()){S.shop.month=monthKey();S.shop.mBought=0}
+  return S.shop;
+}
+const euros=n=>n+" €";
+const LIBERAPAY_URL="https://liberapay.com/PopitesCulture/";
+const KOFI_URL="";   // lien de la page Ko-fi, vide tant qu'elle n'existe pas (le bouton est alors caché)
+function renderShop(){
+  const sh=shopState(), wLeft=SHOP_LIMIT-sh.bought, mLeft=SHOP_MONTH-sh.mBought, left=Math.max(0,Math.min(wLeft,mLeft));
+  $("#view").innerHTML=`<div class="page">
+    <div><div class="kicker">Soutenir</div><h1>Un jeu gratuit et open source</h1>
+      <p class="lede">Popites est gratuit, sans pub, sans compte et son code est ouvert. ${SHOP_ENABLED?"Les dons et les quelques boosters payants aident":"Aucun achat dans le jeu : tout se gagne en jouant. Les dons aident"} à agrandir et améliorer le jeu.</p></div>
+    <section class="panel">
+      <h2>Faire un don</h2>
+      <p>Un don ne donne aucun avantage dans le jeu. C'est juste un coup de main pour que le projet continue.</p>
+      <div class="row"><a class="btn" href="${LIBERAPAY_URL}" target="_blank" rel="noopener" style="text-decoration:none">Donner sur Liberapay</a>${KOFI_URL?`<a class="btn ghost" href="${KOFI_URL}" target="_blank" rel="noopener" style="text-decoration:none">Ko-fi</a>`:""}</div>
+      <p class="note">Liberapay permet un don chaque semaine, chaque mois ou chaque année.</p>
+    </section>
+    ${SHOP_ENABLED?`<section class="panel">
+      <h2>Acheter un booster</h2>
+      <p><strong>${euros(PRICE)} le booster</strong>, avec deux plafonds qui ne se débloquent jamais : <strong>${SHOP_LIMIT} par ${SHOP_PERIOD}</strong> et <strong>${SHOP_MONTH} par mois</strong>, soit ${euros(SHOP_MONTH*PRICE)} au maximum. C'est volontaire : on ne veut pas que quelqu'un se ruine sur un jeu de cartes. Les cartes ne se revendent pas contre de l'argent réel.</p>
+      <div class="row"><span class="note" style="min-width:110px">Cette ${SHOP_PERIOD}</span><div class="limit" aria-label="${Math.max(0,wLeft)} achats restants cette semaine">${Array.from({length:SHOP_LIMIT},(_,i)=>`<i class="${i<sh.bought?"used":"free"}"></i>`).join("")}</div>
+        <span class="note">${Math.max(0,wLeft)} restant${wLeft>1?"s":""}</span></div>
+      <div class="row"><span class="note" style="min-width:110px">Ce mois-ci</span><div class="limit" aria-label="${mLeft} achats restants ce mois">${Array.from({length:SHOP_MONTH},(_,i)=>`<i class="${i<sh.mBought?"used":"free"}"></i>`).join("")}</div>
+        <span class="note">${euros(sh.mBought*PRICE)} dépensés sur ${euros(SHOP_MONTH*PRICE)}</span></div>
+      <div class="row">
+        <span class="note">Booster surprise : catégorie tirée au sort.</span>
+        <button class="btn" id="shop-buy" ${left?"":"disabled"}>${left?`Acheter · ${euros(PRICE)}`:mLeft<=0?"Plafond du mois atteint":"Limite de la semaine atteinte, à lundi"}</button>
+      </div>
+      <p class="note">Prototype : l'achat est simulé, aucun paiement. Les taux d'obtention sont affichés dans Infos.</p>
+    </section>`:""}</div>`;
+  if(!SHOP_ENABLED) return;
+  $("#shop-buy").onclick=()=>{
+    const sh=shopState(); if(sh.bought>=SHOP_LIMIT||sh.mBought>=SHOP_MONTH) return;
+    sh.bought++; sh.mBought++;
+    S.packs.push({c:null,g:"",src:"Boutique"}); save(); render();
+  };
+}
+
+/* ---------- Profil : pseudo, stats, badges de sous-genres ---------- */
+function renderProfile(){
+  const all=COLLECTIONS.reduce((s,c)=>s+c.all.length,0), got=COLLECTIONS.reduce((s,c)=>s+ownedIn(c.all),0);
+  const subs=COLLECTIONS.flatMap(c=>c.subs.map(s=>({c,s,key:`${c.id}-${s.id}`,done:ownedIn(s.cards)===s.cards.length})));
+  const nb=subs.filter(x=>x.done).length;
+  $("#view").innerHTML=`<div class="page">
+    <div><div class="kicker">Profil</div><h1>${esc(S.pseudo||"Collectionneur·se anonyme")}</h1>
+      <p class="lede">Chaque sous-genre complété te donne son badge.</p></div>
+    <section class="panel">
+      <div class="pseudo"><label class="note" for="pseudo">Pseudo</label><input type="text" id="pseudo" maxlength="24" placeholder="Ton pseudo"><button class="btn sm" id="pseudo-ok">Enregistrer</button></div>
+      <div class="pstats">
+        <div class="pstat"><b>${got}/${all}</b><span>cartes</span></div>
+        <div class="pstat"><b>${Math.round(got/all*100)} %</b><span>de l'album</span></div>
+        <div class="pstat"><b>${nb}/${subs.length}</b><span>badges</span></div>
+        <div class="pstat"><b>${S.stats.opened}</b><span>boosters ouverts</span></div>
+        <div class="pstat"><b>${S.stats.quizWon}</b><span>quiz réussis</span></div>
+      </div>
+    </section>
+    ${COLLECTIONS.map(c=>`<section class="panel"><h2>${esc(c.name)}</h2><div class="badges">${subs.filter(x=>x.c===c).map(({s,key,done})=>{const [ic,bn]=BADGES[key];
+      return `<div class="bdg ${done?"":"off"}" style="--h:${c.hue}" aria-label="Badge ${esc(bn)}, ${done?"obtenu":"verrouillé"}">
+        <span class="ic" aria-hidden="true">${ic}</span><span class="bn">${esc(bn)}</span><span class="bs">${esc(s.name)} · ${ownedIn(s.cards)}/${s.cards.length}</span></div>`}).join("")}</div></section>`).join("")}
+    <section class="panel">
+      <h2>Mes amis</h2>
+      <p>Partage ton profil (pseudo, badges, avancement) à tes amis : ils t'ajoutent en ouvrant ton lien. Renvoie-le quand tu progresses, ta fiche se met à jour chez eux.</p>
+      <div class="row"><button class="btn" id="fr-share">Partager mon profil</button><button class="btn ghost" id="fr-copy">Copier mon code ami</button><span class="note" id="fr-sharemsg"></span></div>
+      <div class="row"><input type="text" id="fr-in" placeholder="Colle ici le code ou le lien d'un ami" aria-label="Code ami" style="flex:1;min-width:200px"><button class="btn ghost" id="fr-add">Ajouter</button></div>
+      <span class="note" id="fr-msg"></span>
+      <div class="friends">${S.friends.length?S.friends.slice().sort((a,b)=>friendPct(b)-friendPct(a)).map(friendHTML).join(""):`<p class="note">Pas encore d'ami ajouté.</p>`}</div>
+    </section>
+    <section class="panel">
+      <h2>Sauvegarde</h2>
+      <p>Pas de compte : ta collection reste sur cet appareil. Pour la retrouver sur un autre téléphone, exporte ton code ici puis importe-le là-bas.</p>
+      <div class="row"><button class="btn" id="sv-export">Exporter ma collection</button>${window.claude?"":`<button class="btn ghost" id="sv-file">Télécharger en fichier</button>`}</div>
+      <textarea id="sv-code" class="code" rows="3" readonly hidden aria-label="Code de sauvegarde"></textarea>
+      <div class="row" id="sv-copyrow" hidden><button class="btn sm" id="sv-copy">Copier le code</button><span class="note" id="sv-copymsg"></span></div>
+      <h3 style="margin-top:8px">Importer</h3>
+      <textarea id="sv-in" class="code" rows="3" placeholder="Colle ici un code de sauvegarde Popites" aria-label="Code à importer"></textarea>
+      <div class="row"><button class="btn ghost" id="sv-import">Importer le code</button><label class="btn ghost" for="sv-infile" style="cursor:pointer">Importer un fichier</label><input type="file" id="sv-infile" accept=".txt,text/plain" hidden><span class="note" id="sv-msg"></span></div>
+      <p class="note">Importer remplace la collection de cet appareil.</p>
+    </section>
+  </div>`;
+  $("#pseudo").value=S.pseudo||"";
+  $("#pseudo-ok").onclick=()=>{S.pseudo=$("#pseudo").value.trim().slice(0,24);save();render()};
+  const showCode=()=>{const t=$("#sv-code");t.value=exportCode();t.hidden=false;$("#sv-copyrow").hidden=false;t.select();return t.value};
+  $("#sv-export").onclick=showCode;
+  $("#sv-copy").onclick=async()=>{const v=showCode();try{await navigator.clipboard.writeText(v);$("#sv-copymsg").textContent="Code copié."}catch(e){$("#sv-copymsg").textContent="Sélectionne le code et copie-le à la main."}};
+  /* dans l'aperçu claude.ai la page ne peut pas télécharger : le bouton n'existe que sur le vrai site */
+  if($("#sv-file")) $("#sv-file").onclick=()=>{
+    const v=showCode();
+    try{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([v],{type:"text/plain"}));a.download=`popites-sauvegarde-${today()}.txt`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+    catch(e){$("#sv-copymsg").textContent="Téléchargement impossible ici : copie le code à la place."}
+  };
+  let armedImport=false;
+  const doImport=txt=>{
+    const st=importCode(txt);
+    if(!st){$("#sv-msg").textContent="Code invalide ou abîmé.";return}
+    if(!armedImport){armedImport=true;$("#sv-import").textContent="Confirmer : remplacer ma collection";
+      $("#sv-msg").textContent=`Ce code contient ${Object.keys(st.owned).length} cartes différentes.`;pendingImport=st;return}
+    S=pendingImport;S.claimed=S.claimed||{};S.stats=S.stats||{opened:0,quizWon:0};S.free=S.free||{stock:2,t:Date.now()};
+    S.pid=S.pid||Math.random().toString(36).slice(2,10);S.friends=Array.isArray(S.friends)?S.friends:[];
+    save();quiz=null;render();$("#sv-msg").textContent="Collection importée.";
+  };
+  let pendingImport=null;
+  $("#sv-import").onclick=()=>doImport($("#sv-in").value);
+  $("#sv-infile").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{$("#sv-in").value=t.trim();doImport(t)})};
+  bindFriends();
+}
+
+/* ---------- Amis : profil partagé par lien ou code (photo à un instant donné, sans serveur ni compte) ---------- */
+const FRIEND_PREFIX="POPAMI1.";
+const b64url=s=>b64(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const unb64url=s=>unb64(s.replace(/-/g,"+").replace(/_/g,"/")+"===".slice((s.length+3)%4));
+function mySnapshot(){
+  const s={}; COLLECTIONS.forEach(c=>c.subs.forEach(x=>{s[`${c.id}-${x.id}`]=[ownedIn(x.cards),x.cards.length]}));
+  return {pid:S.pid,p:(S.pseudo||"Anonyme").slice(0,24),at:Date.now(),s};
+}
+function friendCode(){const p=b64url(JSON.stringify(mySnapshot()));return FRIEND_PREFIX+p+"."+hash("popami"+p).toString(36)}
+function friendLink(){return location.origin+location.pathname+"#ami="+friendCode()}
+function parseFriend(txt){
+  try{
+    let t=String(txt).trim(); const i=t.indexOf("#ami="); if(i>=0) t=t.slice(i+5);
+    t=decodeURIComponent(t).replace(/\s+/g,"");
+    if(!t.startsWith(FRIEND_PREFIX)) return null;
+    const [p,sum]=t.slice(FRIEND_PREFIX.length).split(".");
+    if(hash("popami"+p).toString(36)!==sum) return null;
+    const f=JSON.parse(unb64url(p));
+    if(!f||typeof f.pid!=="string"||typeof f.s!=="object") return null;
+    f.p=String(f.p||"Anonyme").slice(0,24);
+    return f;
+  }catch(e){return null}
+}
+/* ajoute ou met à jour (même identifiant = même ami) ; renvoie un message */
+function addFriend(f){
+  if(f.pid===S.pid) return "C'est ton propre profil !";
+  const i=S.friends.findIndex(x=>x.pid===f.pid);
+  if(i>=0){ if(f.at<S.friends[i].at) return `Tu as déjà une fiche plus récente de ${f.p}.`; S.friends[i]=f; save(); return `Fiche de ${f.p} mise à jour.` }
+  S.friends.push(f); save(); return `${f.p} ajouté·e à tes amis.`;
+}
+const pctOf=(o,t)=>t?Math.round(o/t*100):0;
+function friendCat(f,c){let o=0,t=0;c.subs.forEach(x=>{const v=f.s[`${c.id}-${x.id}`];if(v){o+=v[0];t+=v[1]}});return pctOf(o,t)}
+function friendPct(f){let o=0,t=0;Object.values(f.s).forEach(v=>{o+=v[0];t+=v[1]});return pctOf(o,t)}
+function friendHTML(f){
+  const badges=COLLECTIONS.flatMap(c=>c.subs.map(x=>`${c.id}-${x.id}`)).filter(k=>{const v=f.s[k];return v&&v[1]&&v[0]>=v[1]});
+  const date=new Date(f.at).toLocaleDateString("fr-FR",{day:"numeric",month:"short"});
+  return `<article class="friend">
+    <div class="fhead"><div><b>${esc(f.p)}</b><span class="note"> · ${friendPct(f)} % de l'album · mis à jour le ${date}</span></div>
+      <button class="btn ghost sm" data-unfriend="${esc(f.pid)}">Retirer</button></div>
+    <div class="fbadges">${badges.length?badges.map(k=>`<span title="${esc(BADGES[k][1])}">${BADGES[k][0]}</span>`).join(""):`<span class="note">Aucun badge pour l'instant</span>`}</div>
+    ${COLLECTIONS.map(c=>{const fp=friendCat(f,c), mp=pctOf(ownedIn(c.all),c.all.length);return `<details class="fcat"><summary><span>${esc(c.name)}</span><span class="prog"><i style="width:${fp}%"></i></span><span class="n">${fp} %</span></summary>
+      <div class="fsubs">${c.subs.map(x=>{const v=f.s[`${c.id}-${x.id}`]||[0,0];return `<div><span>${esc(x.name)}</span><span class="n">${pctOf(v[0],v[1])} %</span><span class="n me">toi ${pctOf(ownedIn(x.cards),x.cards.length)} %</span></div>`}).join("")}
+      <div class="note">Toi sur ${esc(c.name)} : ${mp} %</div></div></details>`}).join("")}
+  </article>`;
+}
+function bindFriends(){
+  const msg=t=>{$("#fr-sharemsg").textContent=t};
+  $("#fr-share").onclick=async()=>{
+    const url=friendLink(), text=`Ajoute-moi sur Popites ! ${friendPct(mySnapshot())} % de l'album pour l'instant.`;
+    if(navigator.share){try{await navigator.share({title:"Popites",text,url});return}catch(e){if(e.name==="AbortError")return}}
+    try{await navigator.clipboard.writeText(url);msg("Lien copié : envoie-le à tes amis.")}catch(e){msg("Copie impossible : utilise « Copier mon code ami ».")}
+  };
+  $("#fr-copy").onclick=async()=>{try{await navigator.clipboard.writeText(friendCode());msg("Code ami copié.")}catch(e){$("#fr-in").value=friendCode();msg("Copie impossible : le code est dans le champ ci-dessous.")}};
+  $("#fr-add").onclick=()=>{
+    const f=parseFriend($("#fr-in").value);
+    if(!f){$("#fr-msg").textContent="Code ou lien invalide.";return}
+    const m=addFriend(f); render(); $("#fr-msg").textContent=m;
+  };
+  document.querySelectorAll("[data-unfriend]").forEach(b=>b.onclick=()=>{
+    if(b.dataset.armed){S.friends=S.friends.filter(x=>x.pid!==b.dataset.unfriend);save();render();return}
+    b.dataset.armed="1";b.textContent="Confirmer";
+  });
+}
+/* ouverture d'un lien ami (…#ami=CODE) : proposer d'ajouter, puis nettoyer l'adresse */
+function checkFriendLink(){
+  if(!location.hash.startsWith("#ami=")) return;
+  const f=parseFriend(location.hash);
+  history.replaceState(null,"",location.pathname+location.search);
+  const m=$("#modal"); m.hidden=false;
+  m.innerHTML=f?`<div class="mbox"><div class="kicker">Lien ami</div><h1>Ajouter ${esc(f.p)} ?</h1>
+      <p class="lede" style="margin-inline:auto">${friendPct(f)} % de l'album. Tu verras ses badges et son avancement dans ton profil.</p>
+      <div class="mactions"><button class="btn" id="fl-yes">Ajouter</button><button class="btn ghost" id="fl-no">Non merci</button></div></div>`
+    :`<div class="mbox"><h1>Lien ami invalide</h1><p class="lede" style="margin-inline:auto">Le lien est incomplet ou abîmé. Demande à ton ami de le renvoyer.</p>
+      <div class="mactions"><button class="btn" id="fl-no">OK</button></div></div>`;
+  const close=()=>{m.hidden=true;m.innerHTML=""};
+  $("#fl-no").onclick=close;
+  if(f) $("#fl-yes").onclick=()=>{const t=addFriend(f);close();view="profile";render();window.scrollTo(0,0);$("#fr-msg").textContent=t};
+}
+
+/* code de sauvegarde : état du jeu en JSON -> base64, avec une somme de contrôle pour repérer un code abîmé ou retouché */
+const SAVE_PREFIX="POPITES1.";
+function b64(s){const u=new TextEncoder().encode(s);let bin="";for(let i=0;i<u.length;i+=8192)bin+=String.fromCharCode(...u.subarray(i,i+8192));return btoa(bin)}
+function unb64(s){return new TextDecoder().decode(Uint8Array.from(atob(s),ch=>ch.charCodeAt(0)))}
+function exportCode(){const p=b64(JSON.stringify(S));return SAVE_PREFIX+p+"."+hash("popites"+p).toString(36)}
+function importCode(txt){
+  try{
+    const t=String(txt).trim().replace(/\s+/g,"");
+    if(!t.startsWith(SAVE_PREFIX)) return null;
+    const [p,sum]=t.slice(SAVE_PREFIX.length).split(".");
+    if(hash("popites"+p).toString(36)!==sum) return null;
+    const st=JSON.parse(unb64(p));
+    if(!st||typeof st.owned!=="object"||!Array.isArray(st.packs)) return null;
+    return st;
+  }catch(e){return null}
+}
+
+/* ---------- Sondage privé : formulaire externe (Framaforms), résultats publiés à la main chaque mois ---------- */
+const POLL_FORM_URL="https://framaforms.org/quelle-collection-ensuite-1793786240";   // formulaire Framaforms : les votes ne sont visibles que par l'auteur
+/* classement publié chaque mois, mis à jour à la main ; null tant qu'il n'y en a pas */
+const POLL_RESULTS=null;  // ex. {mois:"novembre 2026", top:["Films","Plus de cartes : Manga","Animé"]}
+function renderPoll(){
+  $("#view").innerHTML=`<div class="page">
+    <div><div class="kicker">Sondage</div><h1>Quelle collection ensuite ?</h1>
+      <p class="lede">Choisis jusqu'à 3 propositions : une nouvelle catégorie (Films, Animé, Marques, Animaux, Jeux vidéo, Sportifs, Youtubeurs & streamers, Livres…) ou plus de cartes dans une catégorie existante. Ton vote reste privé, le classement est publié chaque mois.</p></div>
+    <section class="panel">
+      ${POLL_FORM_URL?`<iframe src="${esc(POLL_FORM_URL)}" title="Formulaire du sondage" style="width:100%;min-height:720px;border:0;border-radius:10px;background:#fff" loading="lazy"></iframe>
+        <p class="note">Le formulaire ne marche pas ici ? <a href="${esc(POLL_FORM_URL)}" target="_blank" rel="noopener" style="color:var(--accent)">Ouvre-le dans un nouvel onglet</a>.</p>`
+        :`<p>Le formulaire de vote arrive bientôt.</p>`}
+    </section>
+    <section class="panel"><h2>Résultats du mois</h2>
+      ${POLL_RESULTS?`<p class="note">${esc(POLL_RESULTS.mois)}</p><ol class="plain">${POLL_RESULTS.top.map(x=>`<li><strong>${esc(x)}</strong></li>`).join("")}</ol>`
+        :`<p>Pas encore de classement : le premier sera publié à la fin du mois.</p>`}
+    </section></div>`;
+}
+/* ---------- Infos : rareté, taux, règles, données ---------- */
+function renderInfo(){
+  const tot=Object.values(DROP).reduce((a,b)=>a+b,0);
+  const col={C:"var(--r-C)",PU:"var(--r-PU)",R:"var(--r-R)",E:"var(--r-E)",L:"var(--r-L)"};
+  $("#view").innerHTML=`<div class="page">
+    <div><div class="kicker">Infos</div><h1>Comment marche le jeu</h1>
+      <p class="lede">Tout ce qui décide de la rareté d'une carte et de ce que tu trouves dans un booster.</p></div>
+    <section class="panel">
+      <h2>Taux d'obtention</h2>
+      <p>Un booster contient ${PACK_SIZE} cartes, chacune tirée avec ces chances. Dans un booster gagné au quiz du jour, la ${PACK_SIZE}e carte est au moins rare ; dans un booster de sous-genre complété, au moins épique.</p>
+      <div class="odds">${["C","PU","R","E","L"].map(t=>`<div class="odd" style="--c:${col[t]}"><b>${Math.round(DROP[t]/tot*100)} %</b><span>${RAR[t]}</span></div>`).join("")}</div>
+    </section>
+    <section class="panel">
+      <h2>D'où vient la rareté</h2>
+      <p>Chaque carte affiche un chiffre réel : ses vues sur Wikipédia en français pendant les 12 derniers mois. Un personnage qui donne son nom à son œuvre (Lucky Luke, Totoro…) prend les vues de l'œuvre si elles sont plus fortes. Dans chaque sous-genre, les cartes sont classées de la plus vue à la moins vue : les ${RANK_SHARE.L} % premières sont légendaires, les ${RANK_SHARE.E} % suivantes épiques, puis ${RANK_SHARE.R} % rares, ${RANK_SHARE.PU} % peu communes et le reste communes.</p>
+      ${COLLECTIONS.map(c=>`<div class="tblwrap"><table class="tbl"><thead><tr><th>${esc(c.name)}</th><th>Cartes</th>${["L","E","R","PU","C"].map(t=>`<th>${RAR[t]}</th>`).join("")}</tr></thead>
+        <tbody>${c.subs.map(s=>`<tr><td>${esc(s.name)}</td><td>${s.cards.length}</td>${["L","E","R","PU","C"].map(t=>`<td>${s.cards.filter(k=>k.r===t).length}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`).join("")}
+      <p class="note">Données Wikidata et Wikipédia, mises à jour à chaque génération des cartes.</p>
+    </section>
+    <section class="panel">
+      <h2>Gagner des boosters</h2>
+      <ul class="plain">
+        <li><strong>Quiz du jour :</strong> un par catégorie et par jour, 3 bonnes réponses sur 5 pour gagner un booster de la catégorie avec une rare garantie.</li>
+        <li><strong>Booster gratuit :</strong> un toutes les 20 minutes (3 par heure), jusqu'à ${FREE_MAX} en stock. Catégorie tirée au sort.</li>
+        <li><strong>Quiz express :</strong> ${EXPRESS_PER_DAY} par jour. ${EXPRESS_QS} questions difficiles, ${EXPRESS_NEED} bonnes réponses débloquent un booster surprise tout de suite. Chaque quiz express donne 2 essais, le second avec d'autres questions.</li>
+        <li><strong>Sous-genre complété :</strong> un badge pour ton profil et un booster avec une épique garantie.</li>
+        <li><strong>Doublons :</strong> 5 doublons d'une catégorie contre un booster de cette catégorie.</li>
+        ${SHOP_ENABLED?`<li><strong>Boutique :</strong> ${euros(PRICE)} le booster surprise, ${SHOP_LIMIT} maximum par ${SHOP_PERIOD} et ${SHOP_MONTH} par mois (${euros(SHOP_MONTH*PRICE)}).</li>`:`<li><strong>Aucun achat :</strong> pas de booster payant, tout se gagne en jouant.</li>`}
+      </ul>
+    </section>
+    <section class="panel">
+      <h2>Données et licences</h2>
+      <ul class="plain">
+        <li>Jeu gratuit et open source.</li>
+        <li>Les informations sur les œuvres viennent de bases ouvertes (Wikidata, domaine public).</li>
+        <li>Les chiffres de vues viennent des statistiques publiques de Wikipédia (Wikimedia).</li>
+        <li>Les descriptions des personnages sont écrites pour le jeu, d'après les articles Wikipédia en français.</li>
+        <li>Aucune photo n'est utilisée sur les cartes.</li>
+        <li>Aucun logo, affiche ou dessin officiel : les personnages sont évoqués par leurs couleurs, jamais redessinés.</li>
+      </ul>
+    </section>
+    <section class="panel">
+      <h2>Installer l'appli</h2>
+      ${isInstalled()?`<p>Popites est déjà installé sur cet appareil.</p>`:`
+      <ul class="plain">
+        <li><strong>iPhone / iPad (Safari) :</strong> touche le bouton Partager, puis « Sur l'écran d'accueil ».</li>
+        <li><strong>Android (Chrome) :</strong> touche « Installer l'appli » en haut de la page, ou le menu ⋮ puis « Installer l'application ».</li>
+        <li><strong>Ordinateur (Chrome, Edge) :</strong> l'icône d'installation apparaît dans la barre d'adresse.</li>
+      </ul>`}
+      <p class="note">Une fois installé, le jeu s'ouvre en plein écran et marche même sans connexion.</p>
+    </section></div>`;
+}
+
+/* ---------- Contact, mentions légales, confidentialité, licence ---------- */
+const CONTACT_MAIL="popitesculture@protonmail.com";
+function renderLegal(){
+  const mail=`<a href="mailto:${CONTACT_MAIL}" style="color:var(--accent)">${CONTACT_MAIL}</a>`;
+  $("#view").innerHTML=`<div class="page">
+    <div><div class="kicker">À propos</div><h1>Contact et mentions légales</h1>
+      <p class="lede">Qui fait le jeu, où il est hébergé et ce qu'il fait de tes données (presque rien).</p></div>
+    <section class="panel" id="legal-contact">
+      <h2>Contact</h2>
+      <p>Une question, une idée, un problème ? Écris à ${mail}.</p>
+      <p>Une question du quiz est fausse ? Le plus simple est de la signaler directement depuis le quiz, avec le bouton « Signaler ».</p>
+    </section>
+    <section class="panel" id="legal-mentions">
+      <h2>Mentions légales</h2>
+      <ul class="plain">
+        <li><strong>Éditeur :</strong> Popites est un site personnel, non professionnel et sans but lucratif. Comme le permet l'article 6, III, 2 de la loi pour la confiance dans l'économie numérique (LCEN), son éditeur a choisi de rester anonyme ; son identité est connue de l'hébergeur.</li>
+        <li><strong>Directeur de la publication :</strong> l'éditeur du site, joignable à ${mail}.</li>
+        <li><strong>Hébergeur :</strong> GitHub Pages, service de GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis (github.com).</li>
+        <li><strong>Œuvres citées :</strong> les noms de séries, mangas, artistes et personnages appartiennent à leurs ayants droit. Ils sont cités à titre d'information, sans logo, image ni dessin officiel. Popites n'est lié à aucun d'eux.</li>
+        <li><strong>Un contenu te pose problème ?</strong> Écris à ${mail} : il sera corrigé ou retiré rapidement.</li>
+      </ul>
+    </section>
+    <section class="panel" id="legal-privacy">
+      <h2>Confidentialité</h2>
+      <ul class="plain">
+        <li><strong>Pas de compte, pas de pub, pas de statistiques de visite, pas de cookie.</strong></li>
+        <li><strong>Ta partie reste sur ton appareil :</strong> collection, boosters, pseudo et liste d'amis sont enregistrés dans le stockage de ton navigateur. Rien n'est envoyé à Popites, qui n'a pas de serveur.</li>
+        <li><strong>Code ami :</strong> il contient ton pseudo, un identifiant tiré au hasard et ta progression. Il ne quitte ton appareil que si tu le partages toi-même.</li>
+        <li><strong>Services extérieurs :</strong> comme tout site, l'hébergeur (GitHub) reçoit ton adresse IP quand tu ouvres le jeu ; les polices d'écriture viennent de Google Fonts, qui la reçoit aussi. Le signalement d'une question et le sondage passent par Framaforms (Framasoft, association française) : seules les réponses que tu écris y sont envoyées. Les sites de dons (Liberapay${KOFI_URL?", Ko-fi":""}) ne sont contactés que si tu cliques sur leur bouton.</li>
+        <li><strong>Tout effacer :</strong> supprime les données du site dans les réglages de ton navigateur, ou désinstalle l'appli. Popites ne garde aucune copie.</li>
+      </ul>
+    </section>
+    <section class="panel" id="legal-licence">
+      <h2>Licence</h2>
+      <ul class="plain">
+        <li><strong>Code :</strong> licence MIT. Tu peux le réutiliser, le modifier et le partager librement, en gardant la mention de la licence.</li>
+        <li><strong>Données :</strong> Wikidata (domaine public, CC0) et statistiques de vues de Wikipédia (Wikimedia).</li>
+      </ul>
+    </section></div>`;
+}
+
+/* ---------- Navigation & outils de test ---------- */
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{view=t.dataset.v;render();window.scrollTo(0,0)});
+document.querySelectorAll("[data-legal]").forEach(a=>a.onclick=e=>{
+  e.preventDefault();view="legal";render();
+  const s=document.getElementById("legal-"+a.dataset.legal);if(s)s.scrollIntoView();else window.scrollTo(0,0);
+});
+$("#t-quiz").onclick=()=>{S.quizDone={};S.shop=null;S.express=null;S.free={stock:FREE_MAX,t:Date.now()};save();quiz=null;render()};
+/* minuteur du booster gratuit : met à jour le compteur, et la page quand un booster arrive */
+setInterval(()=>{
+  if(tickFree()){save();updateTabs();if(view==="packs"&&$("#modal").hidden)render();return}
+  if(view==="packs") showTimer();
+},1000);
+let armed=false;
+$("#t-reset").onclick=e=>{
+  if(!armed){armed=true;e.target.textContent="Confirmer la remise à zéro";setTimeout(()=>{armed=false;e.target.textContent="Test : tout remettre à zéro"},4000);return}
+  S=fresh();save();quiz=null;view="packs";armed=false;e.target.textContent="Test : tout remettre à zéro";render();
+};
+
+/* ---------- Appli installable (PWA) ---------- */
+const isInstalled=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+if("serviceWorker" in navigator&&location.protocol!=="file:"){
+  window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+}
+/* Android / Chrome / Edge : le navigateur propose l'installation, on l'affiche dans un bouton */
+let installEvt=null;
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;$("#install").hidden=false});
+$("#install").onclick=async()=>{
+  if(!installEvt) return;
+  installEvt.prompt(); await installEvt.userChoice; installEvt=null; $("#install").hidden=true;
+};
+window.addEventListener("appinstalled",()=>{$("#install").hidden=true});
+
+render();
+checkFriendLink();
+window.addEventListener("hashchange",checkFriendLink);
