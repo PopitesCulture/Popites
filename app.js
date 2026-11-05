@@ -318,10 +318,10 @@ function renderPacks(){
       </section>
     </div>
     <h2 style="margin-top:28px">Boosters gagnés</h2>
-    ${S.packs.length?`<div class="packs">${S.packs.map((p,i)=>{const c=p.c?colById(p.c):{name:"Surprise",hue:45};
-      return `<button class="pack" id="pack-${i}" data-i="${i}" style="--h:${c.hue}" aria-label="Ouvrir le booster ${esc(c.name)}">
-        <span class="in"><span class="ps">${esc(p.src)}</span><span class="pt">${esc(c.name)}</span>
-        ${p.g==="E"?`<span class="gr E">Épique garantie</span>`:p.g==="R"?`<span class="gr">Rare garantie</span>`:`<span class="ps">${PACK_SIZE} cartes</span>`}</span></button>`}).join("")}</div>`
+    ${S.packs.length?`<div class="packs">${S.packs.map((p,i)=>{const c=p.c?colById(p.c):{name:"Surprise"};
+      return `<button class="pack" id="pack-${i}" data-i="${i}" aria-label="Ouvrir le booster ${esc(c.name)}">
+        ${PAQUET.svg(c.name)}<span class="ps">${esc(p.src)}</span>
+        ${p.g==="E"?`<span class="gr E">Épique garantie</span>`:p.g==="R"?`<span class="gr">Rare garantie</span>`:""}</button>`}).join("")}</div>`
     :`<div class="empty">Aucun booster gagné en attente. Fais un quiz du jour pour en gagner un.</div>`}`;
   document.querySelectorAll(".pack").forEach(b=>b.onclick=()=>openPack(+b.dataset.i));
   $("#free-open").onclick=()=>{
@@ -376,17 +376,31 @@ function openPack(i){
   S.packs.splice(i,1); S.stats.opened++; save();
   const completed=c.subs.filter(s=>!S.claimed[`${c.id}-${s.id}`]&&ownedIn(s.cards)===s.cards.length&&cards.some(k=>k.s===s));
   const m=$("#modal"); m.hidden=false;
+  /* d'abord le paquet à ouvrir en arrachant sa bande ; la bande coince si le booster cache une légendaire ou la Popites */
   m.innerHTML=`<div class="mbox">
-    <div><div class="kicker">Booster ${esc(p.src)}</div><h1>${esc(c.name)}</h1><p class="lede" style="margin-inline:auto">Touche les cartes pour les retourner.</p></div>
-    <div class="reveal">${cards.map((k,j)=>`<button class="flip r-glow-${k.r}" id="flip-${j}" aria-label="Retourner la carte ${j+1}">
-      <span class="inner"><span class="back"><span><b>POPITES</b></span></span>${cardHTML(c,k,{count:false,isNew:isNew[j]})}</span></button>`).join("")}</div>
-    ${completed.length?`<div class="toast">Sous-genre complété : ${completed.map(s=>`${BADGES[c.id+"-"+s.id][0]} ${esc(s.name)}`).join(", ")}. Nouveau badge dans ton profil, et ton booster épique t'attend dans l'album.</div>`:""}
-    <div class="mactions"><button class="btn ghost" id="m-all">Tout retourner</button><button class="btn" id="m-close">Voir l'album</button></div>
+    <div><div class="kicker">Booster ${esc(p.src)}</div><h1>${esc(c.name)}</h1></div>
+    <div id="m-pack"></div>
+    <p class="tear-hint">Pose le doigt sur le petit triangle en haut du paquet et tire vers le bas.</p>
+    <div class="mactions"><button class="btn ghost" id="m-skip">Ouvrir sans glisser</button></div>
   </div>`;
-  m.querySelectorAll(".flip").forEach(f=>f.onclick=()=>f.classList.add("on"));
-  $("#m-all").onclick=()=>m.querySelectorAll(".flip").forEach((f,j)=>setTimeout(()=>f.classList.add("on"),j*140));
-  $("#m-close").onclick=()=>{m.hidden=true;m.innerHTML="";curCol=c.id;view="album";render();window.scrollTo(0,0)};
+  const opener=PAQUET.ouvrir($("#m-pack"),{nom:c.name,coince:cards.jam,fini:showCards});
+  $("#m-skip").onclick=()=>opener.go();
+  if(cards.jam){const t=$("#m-pack .tear"),hint=$(".tear-hint");
+    new MutationObserver((_,o)=>{if(t.classList.contains("jammed")){hint.textContent="Ça coince… Tire encore depuis le triangle !";o.disconnect()}}).observe(t,{attributes:true,attributeFilter:["class"]})}
   render();
+  /* puis les cartes, à retourner */
+  function showCards(){
+    m.innerHTML=`<div class="mbox">
+      <div><div class="kicker">Booster ${esc(p.src)}</div><h1>${esc(c.name)}</h1><p class="lede" style="margin-inline:auto">Touche les cartes pour les retourner.</p></div>
+      <div class="reveal appear">${cards.map((k,j)=>`<button class="flip r-glow-${k.r}" id="flip-${j}" aria-label="Retourner la carte ${j+1}">
+        <span class="inner"><span class="back"><span><b>POPITES</b></span></span>${cardHTML(c,k,{count:false,isNew:isNew[j]})}</span></button>`).join("")}</div>
+      ${completed.length?`<div class="toast">Sous-genre complété : ${completed.map(s=>`${BADGES[c.id+"-"+s.id][0]} ${esc(s.name)}`).join(", ")}. Nouveau badge dans ton profil, et ton booster épique t'attend dans l'album.</div>`:""}
+      <div class="mactions"><button class="btn ghost" id="m-all">Tout retourner</button><button class="btn" id="m-close">Voir l'album</button></div>
+    </div>`;
+    m.querySelectorAll(".flip").forEach(f=>f.onclick=()=>f.classList.add("on"));
+    $("#m-all").onclick=()=>m.querySelectorAll(".flip").forEach((f,j)=>setTimeout(()=>f.classList.add("on"),j*140));
+    $("#m-close").onclick=()=>{m.hidden=true;m.innerHTML="";curCol=c.id;view="album";render();window.scrollTo(0,0)};
+  }
 }
 
 /* ---------- Soutenir : dons + boutique plafonnée ---------- */

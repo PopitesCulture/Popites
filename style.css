@@ -128,17 +128,59 @@ h3{font-size:17px}
 .score{font-family:var(--f-display);font-size:56px;line-height:1;color:var(--accent)}
 
 /* boosters */
-.packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:16px;margin-top:20px}
-.pack{container-type:inline-size;aspect-ratio:3/4.4;border-radius:10px;border:0;padding:0;position:relative;overflow:hidden;color:#fff;text-align:center;transition:transform .2s;
-  background:linear-gradient(160deg,hsl(var(--h) 70% 45%),hsl(calc(var(--h) + 50) 70% 28%));box-shadow:0 8px 22px rgba(0,0,0,.4)}
-.pack::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.07) 0 2px,transparent 2px 9px)}
-.pack::after{content:"";position:absolute;left:0;right:0;top:9%;height:2px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.6) 0 6px,transparent 6px 11px)}
-.pack .in{position:absolute;inset:16% 8% 8%;display:grid;align-content:center;gap:4cqw}
-.pack .pt{font-family:var(--f-display);font-size:13cqw;line-height:1.1;text-wrap:balance}
-.pack .ps{font-family:var(--f-mono);font-size:6.5cqw;opacity:.85}
-.pack .gr{justify-self:center;font-weight:800;font-size:6.5cqw;background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:1cqw 4cqw}
+.packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:20px 16px;margin-top:20px}
+@media (max-width:480px){.packs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* un booster gagné : le paquet noir, et sous lui d'où il vient et ce qu'il garantit */
+.pack{border:0;padding:0;background:none;color:var(--fg);display:grid;gap:8px;justify-items:center;text-align:center}
+.pack .pk{width:100%;max-width:170px;height:auto;filter:drop-shadow(0 10px 16px rgba(0,0,0,.45));transition:transform .2s}
+.pack:hover .pk{transform:translateY(-4px) rotate(-1deg)}
+.pack .ps{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.pack .gr{font-weight:800;font-size:11px;background:var(--accent);color:var(--accent-ink);border-radius:99px;padding:2px 9px}
 .pack .gr.E{background:#c48bff;color:#1c0838}
-.pack:hover{transform:translateY(-3px)}
+.pk-shine{animation:pk-shine 5.5s ease-in-out infinite}
+@keyframes pk-shine{0%,55%{transform:translateX(-220px)}85%,100%{transform:translateX(260px)}}
+
+/* ouverture du paquet : on arrache la bande du milieu, du haut jusqu'en bas ; le paquet finit en trois morceaux */
+.tear{position:relative;width:min(240px,62vw);aspect-ratio:200/380;margin:16px auto 36px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;outline:none;perspective:900px}
+.tear:active{cursor:grabbing}
+.tear:focus-visible{outline:3px solid var(--accent);outline-offset:8px;border-radius:10px}
+.tear .pk{display:block;width:100%;height:100%}
+.tear-part{position:absolute;inset:0;z-index:2;transition:transform 1.2s cubic-bezier(.3,.7,.2,1),opacity .9s ease .2s}
+.tear-part.side{filter:drop-shadow(0 12px 18px rgba(0,0,0,.45))}
+.tear-part.peel{z-index:4;transform-style:preserve-3d;transition:opacity .7s ease}
+.tear-part.peel>div{position:absolute;inset:0;backface-visibility:hidden}
+.tear-part.peel .back{transform:rotateX(180deg);background:linear-gradient(90deg,#5f5e69,#c4c3cd 42%,#e6e5ec 50%,#9897a3 62%,#5f5e69)}
+.tear-inside{position:absolute;z-index:1;left:43%;width:14%;top:1.8%;bottom:1.8%;overflow:hidden;background:linear-gradient(90deg,#b9addb,#efeafd 30%,#ffffff 50%,#efeafd 70%,#b9addb);box-shadow:inset 0 0 8px rgba(154,92,255,.45)}
+.tear-inside::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,59,59,.8),rgba(255,154,26,.8) 17%,rgba(255,225,74,.85) 33%,rgba(54,224,127,.75) 50%,rgba(59,139,255,.8) 66%,rgba(154,92,255,.8) 83%,rgba(255,95,176,.8))}
+.tear-inside::after{content:"";position:absolute;inset:0;mix-blend-mode:screen;background:linear-gradient(180deg,transparent 0 42%,rgba(255,255,255,.95) 50%,transparent 58% 100%) 0 0/100% 300%,linear-gradient(90deg,transparent 15%,rgba(255,255,255,.75) 50%,transparent 85%);animation:tear-glint 1.5s linear infinite}
+@keyframes tear-glint{from{background-position:0 100%,0 0}to{background-position:0 0,0 0}}
+.tear-dots{position:absolute;z-index:3;top:1.5%;bottom:1.5%;width:1.5px;translate:-50% 0;pointer-events:none;background:repeating-linear-gradient(180deg,rgba(255,255,255,.6) 0 2.5px,transparent 2.5px 10px);transition:opacity .25s}
+.tear-dots.l{left:45%}.tear-dots.r{left:55%}
+.tear-tri{position:absolute;z-index:5;left:50%;top:var(--tri-top,.6%);width:8%;aspect-ratio:1.15/1;translate:-50% 0;pointer-events:none;clip-path:polygon(0 0,100% 0,50% 100%);
+  background:linear-gradient(100deg,#fff 0 38%,#ff3b3b 42%,#ff9a1a 45%,#ffe14a 48%,#36e07f 51%,#3b8bff 54%,#9a5cff 57%,#ff5fb0 60%,#fff 64% 100%) no-repeat;background-size:320% 100%;background-position:100% 0;animation:tear-wave 3.6s ease-in-out infinite;transition:opacity .25s}
+@keyframes tear-wave{0%,62%{background-position:100% 0}88%,100%{background-position:0 0}}
+.tear.torn .tear-dots,.tear.torn .tear-tri{opacity:0}
+.tear.torn.jammed .tear-tri{opacity:1}
+.tear.jolt{animation:tear-jolt .45s ease-in-out}
+@keyframes tear-jolt{0%,100%{translate:0 0}20%{translate:-4px 1px}40%{translate:4px -1px}60%{translate:-3px 0}80%{translate:2px 0}}
+.tear.gold .tear-inside{background:linear-gradient(90deg,#c9a44a,#fff4cf 30%,#fffdf3 50%,#fff4cf 70%,#c9a44a);box-shadow:inset 0 0 8px rgba(245,183,0,.6)}
+.tear.gold .tear-inside::before{background:linear-gradient(180deg,rgba(255,236,150,.85),rgba(245,183,0,.85) 35%,rgba(255,214,90,.9) 65%,rgba(214,150,0,.85))}
+.tear.prism .tear-inside{background:#fff;box-shadow:inset 0 0 10px rgba(255,95,176,.7)}
+.tear.prism .tear-inside::before{background:linear-gradient(180deg,#ff3b3b,#ff9a1a 17%,#ffe14a 33%,#36e07f 50%,#3b8bff 66%,#9a5cff 83%,#ff5fb0);animation:tear-prism 1s linear infinite}
+@keyframes tear-prism{to{filter:hue-rotate(360deg)}}
+.tear-burst{position:absolute;left:50%;top:50%;width:190%;aspect-ratio:1;translate:-50% -50%;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(255,225,74,.5) 18%,rgba(154,92,255,.25) 38%,transparent 62%);scale:.2;opacity:0;z-index:6;pointer-events:none}
+.tear.gold .tear-burst{background:radial-gradient(circle,rgba(255,255,255,.95) 0,rgba(245,183,0,.65) 20%,rgba(245,183,0,.22) 40%,transparent 62%)}
+.tear.prism .tear-burst{background:conic-gradient(from 0deg,rgba(255,59,59,.7),rgba(255,225,74,.7),rgba(54,224,127,.7),rgba(59,139,255,.7),rgba(154,92,255,.7),rgba(255,95,176,.7),rgba(255,59,59,.7));-webkit-mask:radial-gradient(circle,#000 0,#000 30%,transparent 62%);mask:radial-gradient(circle,#000 0,#000 30%,transparent 62%)}
+.tear.opened .tear-burst{animation:tear-burst 1.3s ease-out forwards}
+@keyframes tear-burst{0%{scale:.2;opacity:0}25%{opacity:1}100%{scale:1.2;opacity:0}}
+.tear.opened .tear-part.l{transform:translate(-62%,10%) rotate(-14deg);opacity:0}
+.tear.opened .tear-part.r{transform:translate(62%,10%) rotate(14deg);opacity:0}
+.tear.opened .tear-part.peel{opacity:0}
+.tear.opened .tear-inside{opacity:0;transition:opacity .3s}
+.tear-hint{color:var(--muted);font-size:14px;max-width:44ch;margin:0}
+.reveal.appear{animation:reveal-in .6s cubic-bezier(.2,.9,.3,1.1)}
+@keyframes reveal-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.pk-shine{animation:none;opacity:0}.tear-tri,.tear-inside::after,.tear.prism .tear-inside::before,.tear-burst,.reveal.appear{animation:none!important}.tear-part{transition:none}}
 .empty{margin-top:24px;padding:28px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);text-align:center}
 
 /* ouverture */
