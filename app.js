@@ -6,9 +6,12 @@ const METRICS = {
   google: {fmt:v=>`${v}/100 popularité`, unit:v=>v, name:"Indice de recherches Google"},
   views:  {fmt:v=>`${v.toLocaleString("fr-FR")} vues`, unit:v=>v.toLocaleString("fr-FR"), name:"Vues Wikipédia FR sur 12 mois"},
 };
-const RAR = {L:"Légendaire",E:"Épique",R:"Rare",PU:"Peu commune",C:"Commune"};
-const ORDER = ["C","PU","R","E","L"];
-const DROP = {C:45,PU:28,R:16,E:8,L:3};
+const RAR = {P:"Popites",L:"Légendaire",E:"Épique",R:"Rare",PU:"Peu commune",C:"Commune"};
+const ORDER = ["C","PU","R","E","L","P"];
+/* chances de chaque carte d'un booster : jamais de légendaire ni de Popites par ce tirage */
+const DROP = {C:45,PU:28,R:16,E:8};
+/* bande coincée : 1 booster sur 20 cache une légendaire que le joueur n'a pas encore, et 1 sur 20 de ceux-là la Popites à la place */
+const JAM_CHANCE = .05, POPITES_SHARE = .05;
 const PACK_SIZE = 10;
 
 /* ---------- Badges : un par sous-genre complété ---------- */
@@ -25,7 +28,7 @@ const RANK_SHARE = {L:8,E:15,R:22,PU:25,C:30};
 COLLECTIONS.forEach(c=>{
   c.all=[];
   c.subs.forEach(s=>{
-    s.cards=s.cards.map(([title,sub,v,r,qid,pal,deco,blurb],i)=>({id:qid, n:i+1, title, sub, v, r, pal, deco, blurb, s}));
+    s.cards=s.cards.map(([title,sub,v,r,qid,pal,sym,yr,img,credit,blurb],i)=>({id:qid, n:i+1, title, sub, v, r, pal, sym, yr, img, credit, blurb, s}));
     c.all.push(...s.cards);
   });
   c.quiz=QUESTIONS[c.id]||[];
@@ -90,48 +93,45 @@ const ownedIn=list=>list.filter(has).length;
 const dupesIn=list=>list.reduce((s,k)=>s+Math.max(0,(S.owned[k.id]||0)-1),0);
 const pad=(n,of=99)=>String(n).padStart(Math.max(2,String(of).length),"0");
 
-/* motifs des cartes pleines : formes simples en surimpression */
-const svg=(inner,w=40,h=40)=>`url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}'>${inner}</svg>`)}")`;
-const W="fill='white' fill-opacity='.28'", WS="fill='none' stroke='white' stroke-opacity='.3' stroke-width='2.2'";
-const DECO={
-  dots:["radial-gradient(circle,rgba(255,255,255,.3) 18%,transparent 21%)","10cqw 10cqw"],
-  bubbles:[svg(`<circle cx='12' cy='14' r='7' ${WS}/><circle cx='31' cy='31' r='4' ${WS}/><circle cx='32' cy='8' r='2.5' ${W}/>`),"20cqw 20cqw"],
-  stars:[svg(`<path d='M20 6l3.5 9 9.5.5-7.4 6 2.6 9.2L20 25.6l-8.2 5.1 2.6-9.2-7.4-6 9.5-.5z' ${W}/>`),"16cqw 16cqw"],
-  sparkles:[svg(`<path d='M14 4Q15.5 13 24 14Q15.5 15 14 24Q12.5 15 4 14Q12.5 13 14 4z' ${W}/><path d='M31 24Q31.8 29 36 30Q31.8 31 31 36Q30.2 31 26 30Q30.2 29 31 24z' ${W}/>`),"18cqw 18cqw"],
-  flakes:[svg(`<g ${WS}><path d='M20 7v26M8.7 13.5l22.6 13M8.7 26.5l22.6-13'/></g>`),"16cqw 16cqw"],
-  hex:[svg(`<path d='M11 2h18l10 17-10 17H11L1 19z' ${WS}/>`,40,38),"15cqw 14.25cqw"],
-  waves:[svg(`<path d='M0 20Q10 10 20 20T40 20' ${WS}/>`),"14cqw 9cqw"],
-  zigzag:[svg(`<path d='M0 26L10 14L20 26L30 14L40 26' ${WS}/>`),"14cqw 10cqw"],
-  stripes:["repeating-linear-gradient(135deg,rgba(255,255,255,.16) 0 3cqw,transparent 3cqw 9cqw)","auto"],
-  checks:["conic-gradient(rgba(255,255,255,.22) 25%,transparent 0 50%,rgba(255,255,255,.22) 0 75%,transparent 0)","10cqw 10cqw"],
-  sun:["repeating-conic-gradient(from 0deg at 100% 0%,rgba(255,255,255,.2) 0 4deg,transparent 4deg 10deg)","auto"],
-};
+/* symboles de fond (symboles.js) : un motif en damier par symbole, déclaré une seule fois pour toutes les cartes */
+(function symbolTiles(){
+  const css=Object.entries(SYMBOLES).map(([n,p])=>{
+    const s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none" stroke="white" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"><g transform="translate(2 2) scale(1.4)">${p}</g><g transform="translate(22 22) scale(1.4) rotate(18 6 6)">${p}</g></svg>`;
+    return `.s-${n}{--tile:url('data:image/svg+xml,${encodeURIComponent(s)}')}`;
+  }).join("\n");
+  const el=document.createElement("style"); el.textContent=css; document.head.appendChild(el);
+})();
 function lum(hex){const n=parseInt(hex.slice(1),16),c=[n>>16,(n>>8)&255,n&255].map(v=>{v/=255;return v<=.03928?v/12.92:((v+.055)/1.055)**2.4});return .2126*c[0]+.7152*c[1]+.0722*c[2];}
-function fullCardHTML(c,k,opts){
-  const cnt=S.owned[k.id]||0, [p0,p1,p2]=k.pal, d=DECO[k.deco]||DECO.dots;
-  const light=(lum(p0)+lum(p1))/2>.42;
-  return `<div class="card full r-${k.r}" aria-label="${esc(k.title)}, ${RAR[k.r]}">
-    <div class="face" style="--g:linear-gradient(165deg,${p0} 0%,${p1} 62%,${p2} 100%);--deco:${d[0].replace(/"/g,"&quot;")};--ds:${d[1]};--ink:${light?"#1a1420":"#ffffff"};--scrim:${light?"rgba(255,255,255,.42)":"rgba(10,6,20,.38)"}">
-      <div class="top"><span>${k.s.short}</span><span>${pad(k.n,k.s.cards.length)}/${k.s.cards.length}</span></div>
-      <div class="fname">${esc(k.title)}</div>
-      <div class="fsub">${esc(k.sub)}</div>
-      <div class="blurb"><p>${esc(k.blurb)}</p></div>
-      <div class="fstat"><span>${METRICS[c.metric].fmt(k.v)}</span><span class="chip">${RAR[k.r]}</span></div>
-    </div>
-    ${opts.count!==false&&cnt>1?`<span class="count">×${cnt}</span>`:""}
-    ${opts.isNew?`<span class="new">NOUVELLE</span>`:""}
-  </div>`;
+/* petit tirage toujours le même pour une carte : le sens du dégradé change d'une carte à l'autre */
+function seeded(seed){let h=2166136261;for(const ch of seed)h=Math.imul(h^ch.charCodeAt(0),16777619);return()=>((h=Math.imul(h^(h>>>15),2246822507)^Math.imul(h^(h>>>13),3266489909))>>>0)/4294967296}
+/* taille du nom en grand : la plus grande où aucun mot n'est coupé et où tout tient dans la carte */
+function bigSize(title,narrow){
+  const words=title.toUpperCase().split(/\s+/), room=narrow?46:76;
+  for(let s=narrow?12:24;s>=6;s-=.5){
+    const max=Math.floor(room/(s*.74));let lines=1,cur=0,ok=true;
+    for(const w of words){if(w.length>max){ok=false;break}if(cur&&cur+1+w.length>max){lines++;cur=w.length}else cur+=(cur?1:0)+w.length}
+    if(ok&&lines*s*.98<=(narrow?40:46))return s;
+  }
+  return 6;
 }
+/* carte : dégradé + symbole, année en filigrane, personnage détouré (si une image a été choisie), nom en grand, infos ;
+   le tour de la carte porte la couleur de la rareté */
 function cardHTML(c,k,opts={}){
-  if(c.full) return fullCardHTML(c,k,opts);
-  const cnt=S.owned[k.id]||0;
-  return `<div class="card r-${k.r}" style="--h:${hash(k.id)%360}" aria-label="${esc(k.title)}, ${RAR[k.r]}">
-    <div class="face">
-      <div class="top"><span>${k.s.short}</span><span>${pad(k.n,k.s.cards.length)}/${k.s.cards.length}</span></div>
-      <div class="art"><span class="mono">${esc(mono(k.title))}</span></div>
-      <div class="name">${esc(k.title)}</div>
-      <div class="sub">${esc(k.sub)}</div>
-      <div class="stat"><span>${METRICS[c.metric].fmt(k.v)}</span><span class="chip">${RAR[k.r]}</span></div>
+  const cnt=S.owned[k.id]||0, [p0,p1,p2]=k.pal, light=(lum(p0)+lum(p1)+lum(p2))/3>.4;
+  const r=seeded(k.title), ang=Math.round(110+r()*120), mid=Math.round(38+r()*30);
+  const st=`--g:linear-gradient(${ang}deg,${p0} 0%,${p1} ${mid}%,${p2} 100%);--ink:${light?"#15121a":"#ffffff"};--inv:${light?"#ffffff":"#15121a"};--shade:${light?"rgba(255,255,255,.35)":"rgba(0,0,0,.35)"}`;
+  return `<div class="card r-${k.r}${k.img?" has-pic":""}" aria-label="${esc(k.title)}, ${RAR[k.r]}">
+    <div class="in s-${k.sym}" style="${st}">
+      <div class="lay sym"></div>
+      <div class="lay yr">${k.yr||""}</div>
+      ${k.img?`<div class="lay pic"><img src="img/${k.id}.png" alt="" loading="lazy"></div>`:""}
+      <div class="lay front">
+        <div class="top"><span>${k.s.short}</span><span class="n">${pad(k.n,k.s.cards.length)}/${k.s.cards.length}</span></div>
+        <div class="mid"><span class="big" style="font-size:${bigSize(k.title,!!k.img)}cqw">${esc(k.title)}</span></div>
+        <div class="sub">${esc(k.sub)}</div>
+        ${k.img&&k.credit?`<div class="credit">${esc(k.credit)}</div>`:""}
+        <div class="stat"><span>${METRICS[c.metric].fmt(k.v)}</span><span class="chip">${RAR[k.r]}</span></div>
+      </div>
     </div>
     ${opts.count!==false&&cnt>1?`<span class="count">×${cnt}</span>`:""}
     ${opts.isNew?`<span class="new">NOUVELLE</span>`:""}
@@ -346,16 +346,26 @@ function pickTier(allowed){
   const tot=allowed.reduce((s,t)=>s+DROP[t],0);let x=Math.random()*tot;
   for(const t of allowed){x-=DROP[t];if(x<0)return t}return allowed[allowed.length-1];
 }
+/* Tirage d'un booster : 10 cartes de commune à épique. Une fois sur 20, la bande coince : la dernière carte devient
+   une légendaire que le joueur n'a pas encore (une fois sur 20 de ces fois-là, la Popites). Rien de manquant = pas de bande coincée. */
 function draw(c,g){
-  const tiers=ORDER.filter(t=>c.all.some(k=>k.r===t));
-  const min={R:["R","E","L"],E:["E","L"]}[g];
+  const tiers=Object.keys(DROP).filter(t=>c.all.some(k=>k.r===t));
+  const min={R:["R","E"],E:["E"]}[g];
   const out=[];
   for(let i=0;i<PACK_SIZE;i++){
     const allowed=(min&&i===PACK_SIZE-1)?tiers.filter(t=>min.includes(t)):tiers;
     const t=pickTier(allowed), pool=c.all.filter(k=>k.r===t);
     out.push(pool[Math.floor(Math.random()*pool.length)]);
   }
-  return out.sort((a,b)=>ORDER.indexOf(a.r)-ORDER.indexOf(b.r));
+  let jam=null;
+  if(Math.random()<JAM_CHANCE){
+    const missing=t=>c.all.filter(k=>k.r===t&&!S.owned[k.id]);
+    const wantP=Math.random()<POPITES_SHARE, first=missing(wantP?"P":"L"), pool=first.length?first:missing(wantP?"L":"P");
+    if(pool.length){jam=pool[Math.floor(Math.random()*pool.length)];out[PACK_SIZE-1]=jam}
+  }
+  out.sort((a,b)=>ORDER.indexOf(a.r)-ORDER.indexOf(b.r));
+  out.jam=jam?jam.r:"";
+  return out;
 }
 function openPack(i){
   const p=S.packs[i]; if(!p) return;
@@ -369,7 +379,7 @@ function openPack(i){
   m.innerHTML=`<div class="mbox">
     <div><div class="kicker">Booster ${esc(p.src)}</div><h1>${esc(c.name)}</h1><p class="lede" style="margin-inline:auto">Touche les cartes pour les retourner.</p></div>
     <div class="reveal">${cards.map((k,j)=>`<button class="flip r-glow-${k.r}" id="flip-${j}" aria-label="Retourner la carte ${j+1}">
-      <span class="inner"><span class="back">CD</span>${cardHTML(c,k,{count:false,isNew:isNew[j]})}</span></button>`).join("")}</div>
+      <span class="inner"><span class="back"><span><b>POPITES</b></span></span>${cardHTML(c,k,{count:false,isNew:isNew[j]})}</span></button>`).join("")}</div>
     ${completed.length?`<div class="toast">Sous-genre complété : ${completed.map(s=>`${BADGES[c.id+"-"+s.id][0]} ${esc(s.name)}`).join(", ")}. Nouveau badge dans ton profil, et ton booster épique t'attend dans l'album.</div>`:""}
     <div class="mactions"><button class="btn ghost" id="m-all">Tout retourner</button><button class="btn" id="m-close">Voir l'album</button></div>
   </div>`;
@@ -619,13 +629,14 @@ function renderInfo(){
     <section class="panel">
       <h2>Taux d'obtention</h2>
       <p>Un booster contient ${PACK_SIZE} cartes, chacune tirée avec ces chances. Dans un booster gagné au quiz du jour, la ${PACK_SIZE}e carte est au moins rare ; dans un booster de sous-genre complété, au moins épique.</p>
-      <div class="odds">${["C","PU","R","E","L"].map(t=>`<div class="odd" style="--c:${col[t]}"><b>${Math.round(DROP[t]/tot*100)} %</b><span>${RAR[t]}</span></div>`).join("")}</div>
+      <div class="odds">${["C","PU","R","E"].map(t=>`<div class="odd" style="--c:${col[t]}"><b>${Math.round(DROP[t]/tot*100)} %</b><span>${RAR[t]}</span></div>`).join("")}</div>
+      <p><strong>Légendaires et Popites :</strong> environ 1 booster sur ${Math.round(1/JAM_CHANCE)} contient une légendaire que tu n'as pas encore. Dans 1 de ces boosters sur ${Math.round(1/POPITES_SHARE)}, c'est la Popites à la place, soit environ 1 booster sur ${Math.round(1/(JAM_CHANCE*POPITES_SHARE))}. Jamais en double.</p>
     </section>
     <section class="panel">
       <h2>D'où vient la rareté</h2>
-      <p>Chaque carte affiche un chiffre réel : ses vues sur Wikipédia en français pendant les 12 derniers mois. Un personnage qui donne son nom à son œuvre (Lucky Luke, Totoro…) prend les vues de l'œuvre si elles sont plus fortes. Dans chaque sous-genre, les cartes sont classées de la plus vue à la moins vue : les ${RANK_SHARE.L} % premières sont légendaires, les ${RANK_SHARE.E} % suivantes épiques, puis ${RANK_SHARE.R} % rares, ${RANK_SHARE.PU} % peu communes et le reste communes.</p>
-      ${COLLECTIONS.map(c=>`<div class="tblwrap"><table class="tbl"><thead><tr><th>${esc(c.name)}</th><th>Cartes</th>${["L","E","R","PU","C"].map(t=>`<th>${RAR[t]}</th>`).join("")}</tr></thead>
-        <tbody>${c.subs.map(s=>`<tr><td>${esc(s.name)}</td><td>${s.cards.length}</td>${["L","E","R","PU","C"].map(t=>`<td>${s.cards.filter(k=>k.r===t).length}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`).join("")}
+      <p>Chaque carte affiche un chiffre réel : ses vues sur Wikipédia en français pendant les 12 derniers mois. Un personnage qui donne son nom à son œuvre (Lucky Luke, Totoro…) prend les vues de l'œuvre si elles sont plus fortes. Dans chaque sous-genre, les cartes sont classées de la plus vue à la moins vue : la toute première est la <strong>Popites</strong> du sous-genre, puis les ${RANK_SHARE.L} % premières sont légendaires, les ${RANK_SHARE.E} % suivantes épiques, puis ${RANK_SHARE.R} % rares, ${RANK_SHARE.PU} % peu communes et le reste communes.</p>
+      ${COLLECTIONS.map(c=>`<div class="tblwrap"><table class="tbl"><thead><tr><th>${esc(c.name)}</th><th>Cartes</th>${["P","L","E","R","PU","C"].map(t=>`<th>${RAR[t]}</th>`).join("")}</tr></thead>
+        <tbody>${c.subs.map(s=>`<tr><td>${esc(s.name)}</td><td>${s.cards.length}</td>${["P","L","E","R","PU","C"].map(t=>`<td>${s.cards.filter(k=>k.r===t).length}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`).join("")}
       <p class="note">Données Wikidata et Wikipédia, mises à jour à chaque génération des cartes.</p>
     </section>
     <section class="panel">
