@@ -1,6 +1,6 @@
 /* Service worker : garde le jeu sur l'appareil pour qu'il marche hors connexion.
    Changer VERSION à chaque mise en ligne pour que les joueurs reçoivent la nouvelle version. */
-const VERSION = "popites-v10";
+const VERSION = "popites-v12";
 /* tous les fichiers à la racine : l'envoi de dossiers par le site de GitHub marche mal */
 const SHELL = ["./", "index.html", "style.css", "app.js", "collections.js", "questions.js", "manifest.webmanifest",
   "icon-192.png", "icon-512.png", "icon-maskable-512.png", "icon-180.png"];
