@@ -77,6 +77,8 @@ h3{font-size:17px}
 .card .sym{background:var(--ink);opacity:.24;-webkit-mask:var(--tile) 0 0/40cqw 40cqw;mask:var(--tile) 0 0/40cqw 40cqw}
 .card .yr{display:grid;place-items:center;font-family:var(--f-title);font-size:34cqw;line-height:1;opacity:.2;translate:0 2cqw}
 .card .pic img{position:absolute;bottom:-3%;right:12%;height:116%;width:auto;max-width:none;filter:drop-shadow(0 2cqw 3cqw rgba(0,0,0,.35))}
+/* image plus large que haute (personnage bras écartés, groupe…) : centrée, à la largeur de la carte, sans dépasser 116 % de haut */
+.card .pic img.wide{right:auto;left:50%;translate:-50% 0;width:120%;height:auto;max-height:116%;object-fit:contain;object-position:bottom}
 .card .front{display:flex;flex-direction:column;padding:5cqw 5.5cqw 4.5cqw;gap:1.6cqw}
 .card .top{display:flex;justify-content:space-between;gap:2cqw;font-size:6.2cqw;font-weight:800;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap}
 .card .top span:first-child{overflow:hidden;text-overflow:ellipsis}
@@ -84,6 +86,11 @@ h3{font-size:17px}
 .card .mid{flex:1;display:grid;align-items:center;min-height:0}
 .card .big{font-family:var(--f-title);line-height:.95;text-transform:uppercase;text-shadow:0 .8cqw 0 var(--shade);overflow-wrap:break-word}
 .card.has-pic .big{max-width:62%;translate:0 7cqw}
+.card.pic-g .big{justify-self:end;text-align:right}
+/* chanteurs : la photo libre dans une fenêtre en haut, le nom dessous (modèle de la maquette « La musique, en photos ») */
+.card.photo .win{position:relative;flex:1 1 auto;min-height:0;margin-bottom:1cqw;border-radius:3cqw;overflow:hidden;background:#000;box-shadow:0 0 0 .6cqw color-mix(in srgb,var(--ink) 40%,transparent),0 2cqw 4cqw rgba(0,0,0,.3)}
+.card.photo .win img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 22%}
+.card.photo .mid{flex:none}
 .card .sub{font-size:6cqw;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .credit{font-size:3.8cqw;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .stat{display:flex;justify-content:space-between;align-items:center;gap:2cqw;border-top:.5cqw dashed color-mix(in srgb,var(--ink) 45%,transparent);padding-top:2.6cqw;font-size:5.8cqw;font-variant-numeric:tabular-nums}
@@ -273,6 +280,7 @@ ul.plain strong{color:var(--fg)}
 .fhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .fhead b{font-size:16px}
 .fbadges{display:flex;flex-wrap:wrap;gap:6px;font-size:22px;line-height:1}
+.fbadges span{display:block;width:44px}.fbadges svg{width:100%;height:auto;overflow:visible}.fbadges .spark{display:none}
 .fcat summary{display:grid;grid-template-columns:minmax(90px,140px) 1fr auto;align-items:center;gap:10px;cursor:pointer;font-weight:600;font-size:14px;list-style:none}
 .fcat summary::-webkit-details-marker{display:none}
 .fcat summary .n,.fsubs .n{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
@@ -285,3 +293,71 @@ footer{border-top:1px solid var(--line);padding-block:16px;font-size:12px;color:
 footer .sp{flex:1}
 footer a{color:inherit}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- Badges : écussons brodés, écrin du profil, déblocage (badges.js ; maquette validée : design\badges.html) ---------- */
+/* étoiles qui scintillent, reflet qui passe, tour holographique qui tourne */
+.spark{transform-box:fill-box;transform-origin:center;animation:bdg-twinkle 2.4s ease-in-out infinite}
+@keyframes bdg-twinkle{0%,100%{opacity:.1;transform:scale(.4) rotate(0)}50%{opacity:1;transform:scale(1) rotate(45deg)}}
+.shine{animation:bdg-shine 5s ease-in-out infinite}
+@keyframes bdg-shine{0%,72%{transform:translateX(-160px)}100%{transform:translateX(190px)}}
+.locked .spark,.locked .shine{display:none}
+/* badge verrouillé : on peut le toucher, le cadenas tremble */
+svg.locked{cursor:pointer}
+svg.locked:focus-visible{outline:3px solid #ffe14a;outline-offset:4px;border-radius:50%}
+.cadenas{transform-box:fill-box;transform-origin:50% 0%}
+svg.secoue .cadenas{animation:secoue .5s ease-in-out}
+@keyframes secoue{0%,100%{rotate:0deg}15%{rotate:-14deg}35%{rotate:12deg}55%{rotate:-8deg}75%{rotate:5deg}90%{rotate:-2deg}}
+/* écrin du profil : cadre en bois sombre, liseré doré, velours violet, alvéoles creusées, plaques dorées gravées, reflet de vitre */
+.ecrin{position:relative;max-width:640px;width:100%;margin:0 auto;border-radius:22px;padding:16px;
+  background:linear-gradient(135deg,#4a2a1c,#2a160e 40%,#3d2216 70%,#24120b);box-shadow:0 22px 40px rgba(0,0,0,.6),inset 0 2px 0 rgba(255,255,255,.12),inset 0 -3px 6px rgba(0,0,0,.5)}
+.ecrin::before{content:"";position:absolute;inset:9px;border-radius:15px;border:2px solid #c99a3a;box-shadow:0 0 0 1px #6b4a12,inset 0 0 0 1px #6b4a12;pointer-events:none}
+/* velours : grain serré des poils + reflets en plaques (le velours change de teinte selon le sens du poil), sous les écussons */
+.velours{position:relative;border-radius:12px;padding:18px 14px 22px;display:grid;gap:14px;
+  background-color:#2a1748;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='1.6' numOctaves='2' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .22 -.08'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='.012 .02' numOctaves='3' seed='9'/%3E%3CfeColorMatrix values='0 0 0 0 .75 0 0 0 0 .6 0 0 0 0 1 0 0 0 .35 -.12'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 50% 18%,#55338a 0,#2a1748 58%,#170c2b 100%);
+  background-size:120px 120px,100% 100%,100% 100%;background-repeat:repeat,no-repeat,no-repeat;   /* reflets : une seule image étirée, donc aucune jointure */
+  box-shadow:inset 0 8px 18px rgba(0,0,0,.7),inset 0 -2px 6px rgba(0,0,0,.4),inset 0 0 40px rgba(0,0,0,.35)}
+.plaque{justify-self:center;font-family:var(--f-logo);font-size:11px;letter-spacing:.18em;color:#3a2606;padding:4px 14px;border-radius:4px;
+  background:linear-gradient(180deg,#ffe9a6,#d9a63e 55%,#b7832a);box-shadow:0 2px 0 #6b4a12,inset 0 1px 0 rgba(255,255,255,.7);text-shadow:0 1px 0 rgba(255,255,255,.45)}
+.plaque.titre{font-size:12px;padding:6px 18px}
+.rangees{display:grid;gap:16px}
+.rangee{display:grid;gap:8px}
+.rangee .plaque{font-size:9.5px;padding:3px 10px}
+.alveoles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px 12px;padding-bottom:6px}
+.alveole{position:relative;aspect-ratio:1;max-width:100%;border-radius:50%;display:grid;place-items:center;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='1.6' numOctaves='2' seed='5'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .16 -.06'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0/120px 120px,radial-gradient(circle at 50% 38%,#0f0820 0,#1c1130 60%,#2b1a47 100%);
+  box-shadow:inset 0 7px 12px rgba(0,0,0,.85),inset 0 -2px 3px rgba(255,255,255,.08),0 1px 0 rgba(255,255,255,.07)}
+.alveole svg{width:88%;height:auto;overflow:visible;filter:drop-shadow(0 3px 3px rgba(0,0,0,.6))}
+.alveole .spark{display:none}
+.alveole small{position:absolute;bottom:-14px;left:50%;translate:-50% 0;font-family:var(--f-logo);font-size:9.5px;color:#e9dcff;white-space:nowrap;letter-spacing:.04em;text-shadow:0 1px 2px #000}
+.vitre{position:absolute;inset:16px;border-radius:12px;pointer-events:none;
+  background:linear-gradient(115deg,rgba(255,255,255,.24) 0,rgba(255,255,255,.14) 12%,rgba(255,255,255,.05) 24%,rgba(255,255,255,0) 32%,rgba(255,255,255,0) 52%,rgba(255,255,255,.07) 58%,rgba(255,255,255,.13) 63%,rgba(255,255,255,.07) 68%,rgba(255,255,255,0) 76%)}
+@media (max-width:480px){.ecrin{padding:12px}.velours{padding:14px 8px 18px}.alveoles{gap:8px}.alveole small{font-size:8.5px}}
+@media (prefers-reduced-motion:reduce){svg.secoue .cadenas{animation:secoue-doux .5s}@keyframes secoue-doux{50%{opacity:.5}}}
+/* déblocage : explosion de lumière, badge qui arrive en tournant, confettis */
+#debloque{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(8,6,12,.88);overflow:hidden;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+#debloque[hidden]{display:none}
+#debloque .dbl-box{position:relative;display:grid;justify-items:center;gap:14px;text-align:center}
+#debloque .tag{font-family:var(--f-logo);letter-spacing:.2em;font-size:14px;color:#ffe14a}
+#debloque .show svg{width:min(300px,70vw);height:auto;overflow:visible;filter:drop-shadow(0 18px 24px rgba(0,0,0,.6));transition:transform .18s ease-out}
+#debloque .what{font-family:var(--f-title);font-size:22px;color:var(--fg);max-width:22ch;text-wrap:balance}
+#debloque .burst{position:absolute;left:50%;top:50%;width:130vmax;height:130vmax;will-change:rotate;translate:-50% -50%;border-radius:50%;
+  background:repeating-conic-gradient(from 0deg,rgba(255,225,74,.22) 0 8deg,transparent 8deg 20deg),radial-gradient(circle,rgba(255,255,255,.55),rgba(255,95,176,.18) 25%,transparent 45%);opacity:0}
+#debloque .conf i{position:absolute;top:44%;border-radius:2px;opacity:0}
+#debloque.on .burst{animation:bdg-burst 1.9s ease-out forwards, bdg-spin 18s linear 1.9s infinite}
+#debloque.on .show{animation:bdg-arrive 1.9s cubic-bezier(.16,1.12,.3,1) both}
+#debloque.on .tag,#debloque.on .what,#debloque.on .close{animation:bdg-up .6s ease-out 1.5s both}
+#debloque.on .conf i{animation:bdg-fall 2.4s cubic-bezier(.2,.6,.4,1) forwards}
+@keyframes bdg-burst{0%{opacity:0;scale:.2}30%{opacity:1}100%{opacity:.8;scale:1}}
+@keyframes bdg-spin{to{rotate:360deg}}
+@keyframes bdg-arrive{0%{transform:scale(.1) rotate(-1080deg);opacity:0}25%{opacity:1}100%{transform:none}}
+@keyframes bdg-up{from{opacity:0;translate:0 14px}to{opacity:1;translate:0 0}}
+@keyframes bdg-fall{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--r))}}
+@media (prefers-reduced-motion:reduce){#debloque.on .burst,#debloque.on .show,#debloque.on .tag,#debloque.on .what,#debloque.on .close{animation:none;opacity:1}#debloque .burst{opacity:.6}}
+@media (prefers-reduced-motion:reduce){.spark,.shine{animation:none}.shine{display:none}}
+#debloque .close{margin-top:4px}
+.alveole svg{transition:transform .18s ease-out;touch-action:pan-y}
+

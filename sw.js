@@ -1,12 +1,16 @@
 /* Service worker : garde le jeu sur l'appareil pour qu'il marche hors connexion.
    Changer VERSION à chaque mise en ligne pour que les joueurs reçoivent la nouvelle version. */
-const VERSION = "popites-v14";
+const VERSION = "popites-v17";
 /* tous les fichiers à la racine : l'envoi de dossiers par le site de GitHub marche mal */
-const SHELL = ["./", "index.html", "style.css", "app.js", "symboles.js", "paquet.js", "collections.js", "questions.js", "manifest.webmanifest",
+const SHELL = ["./", "index.html", "style.css", "app.js", "symboles.js", "paquet.js", "badges.js", "collections.js", "questions.js", "manifest.webmanifest",
   "icon-192.png", "icon-512.png", "icon-maskable-512.png", "icon-180.png"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  /* cache:"reload" : on va chercher les fichiers sur le serveur, jamais dans le cache du navigateur
+     (sinon la nouvelle version peut garder un ancien app.js pendant 10 minutes) */
+  e.waitUntil(caches.open(VERSION)
+    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {

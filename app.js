@@ -14,13 +14,7 @@ const DROP = {C:45,PU:28,R:16,E:8};
 const JAM_CHANCE = .05, POPITES_SHARE = .05;
 const PACK_SIZE = 10;
 
-/* ---------- Badges : un par sous-genre complété ---------- */
-const BADGES = {
-  "series-med":["🩺","Stéthoscope"], "series-pol":["🔫","Pistolet"], "series-fan":["🐉","Dragon"], "series-com":["🎭","Masques"],
-  "manga-shonen":["⚡","Éclair"], "manga-seinen":["🗡️","Lame"], "manga-shojo":["🌸","Fleur de cerisier"], "manga-sport":["🏀","Ballon"],
-  "musique-rapfr":["🎤","Micro"], "musique-pop":["💿","Disque"], "musique-rock":["🤘","Main rock"], "musique-kpop":["🫰","Cœur coréen"],
-  "perso-disney":["🏰","Château"], "perso-jv":["🎮","Manette"], "perso-anim":["📺","Télé"], "perso-bd":["💬","Bulle"],
-};
+/* ---------- Badges : un écusson brodé par sous-genre complété (dessins et animations dans badges.js) ---------- */
 
 
 /* cartes générées (collections.js) : rareté calculée au rang dans le sous-genre, id = identifiant Wikidata (stable d'une génération à l'autre) */
@@ -105,14 +99,27 @@ function lum(hex){const n=parseInt(hex.slice(1),16),c=[n>>16,(n>>8)&255,n&255].m
 /* petit tirage toujours le même pour une carte : le sens du dégradé change d'une carte à l'autre */
 function seeded(seed){let h=2166136261;for(const ch of seed)h=Math.imul(h^ch.charCodeAt(0),16777619);return()=>((h=Math.imul(h^(h>>>15),2246822507)^Math.imul(h^(h>>>13),3266489909))>>>0)/4294967296}
 /* taille du nom en grand : la plus grande où aucun mot n'est coupé et où tout tient dans la carte */
-function bigSize(title,narrow){
-  const words=title.toUpperCase().split(/\s+/), room=narrow?46:76;
-  for(let s=narrow?12:24;s>=6;s-=.5){
+/* mode : "" (carte sans image), "pic" (personnage détouré à côté du nom), "photo" (nom sous la fenêtre photo, peu de place en hauteur) */
+function bigSize(title,mode){
+  const words=title.toUpperCase().split(/\s+/);
+  const [room,start,tall]={pic:[46,12,40],photo:[86,11,17]}[mode]||[76,24,46];
+  for(let s=start;s>=5;s-=.5){
     const max=Math.floor(room/(s*.74));let lines=1,cur=0,ok=true;
     for(const w of words){if(w.length>max){ok=false;break}if(cur&&cur+1+w.length>max){lines++;cur=w.length}else cur+=(cur?1:0)+w.length}
-    if(ok&&lines*s*.98<=(narrow?40:46))return s;
+    if(ok&&lines*s*.98<=tall)return s;
   }
-  return 6;
+  return 5;
+}
+/* image détourée : réglage de base (116 %, 12 % du bord droit, -3 % en bas ; centrée si l'image est large),
+   ou réglage de la carte [taille, vers le bord, hauteur, côté d/g, miroir, rotation] fait avec outils\reglage-images.html */
+function picStyle(t){
+  const [h,x,y,side,m,rot]=t, tr=[rot?`rotate(${rot}deg)`:"",m?"scaleX(-1)":""].filter(Boolean).join(" ");
+  return `height:${h}%;bottom:${y}%;${side==="g"?`left:${x}%;right:auto`:`right:${x}%`}${tr?`;transform:${tr}`:""}`;
+}
+function picHTML(k){
+  return Array.isArray(k.img)
+    ? `<img src="img/${k.id}.webp" alt="" loading="lazy" style="${picStyle(k.img)}">`
+    : `<img src="img/${k.id}.webp" alt="" loading="lazy" onload="if(this.naturalWidth>this.naturalHeight*.8)this.classList.add('wide')">`;
 }
 /* carte : dégradé + symbole, année en filigrane, personnage détouré (si une image a été choisie), nom en grand, infos ;
    le tour de la carte porte la couleur de la rareté */
@@ -120,14 +127,16 @@ function cardHTML(c,k,opts={}){
   const cnt=S.owned[k.id]||0, [p0,p1,p2]=k.pal, light=(lum(p0)+lum(p1)+lum(p2))/3>.4;
   const r=seeded(k.title), ang=Math.round(110+r()*120), mid=Math.round(38+r()*30);
   const st=`--g:linear-gradient(${ang}deg,${p0} 0%,${p1} ${mid}%,${p2} 100%);--ink:${light?"#15121a":"#ffffff"};--inv:${light?"#ffffff":"#15121a"};--shade:${light?"rgba(255,255,255,.35)":"rgba(0,0,0,.35)"}`;
-  return `<div class="card r-${k.r}${k.img?" has-pic":""}" aria-label="${esc(k.title)}, ${RAR[k.r]}">
+  const photo=k.img===2, cut=k.img&&!photo;   // photo libre dans sa fenêtre (chanteurs) ou personnage détouré
+  return `<div class="card r-${k.r}${cut?" has-pic":""}${photo?" photo":""}${k.img&&k.img[3]==="g"?" pic-g":""}" aria-label="${esc(k.title)}, ${RAR[k.r]}">
     <div class="in s-${k.sym}" style="${st}">
       <div class="lay sym"></div>
-      <div class="lay yr">${k.yr||""}</div>
-      ${k.img?`<div class="lay pic"><img src="img/${k.id}.png" alt="" loading="lazy"></div>`:""}
+      ${photo?"":`<div class="lay yr">${k.yr||""}</div>`}
+      ${cut?`<div class="lay pic">${picHTML(k)}</div>`:""}
       <div class="lay front">
         <div class="top"><span>${k.s.short}</span><span class="n">${pad(k.n,k.s.cards.length)}/${k.s.cards.length}</span></div>
-        <div class="mid"><span class="big" style="font-size:${bigSize(k.title,!!k.img)}cqw">${esc(k.title)}</span></div>
+        ${photo?`<div class="win"><img src="img/${k.id}.webp" alt="${esc(k.title)}" loading="lazy"></div>`:""}
+        <div class="mid"><span class="big" style="font-size:${bigSize(k.title,photo?"photo":cut?"pic":"")}cqw">${esc(k.title)}</span></div>
         <div class="sub">${esc(k.sub)}</div>
         ${k.img&&k.credit?`<div class="credit">${esc(k.credit)}</div>`:""}
         <div class="stat"><span>${METRICS[c.metric].fmt(k.v)}</span><span class="chip">${RAR[k.r]}</span></div>
@@ -171,7 +180,7 @@ function renderAlbum(){
       const o=ownedIn(s.cards), done=o===s.cards.length, key=`${c.id}-${s.id}`, claimed=S.claimed[key];
       return `<section class="subsec" id="sub-${key}">
         <div class="subhead">
-          <div class="l"><h3>${esc(s.name)}</h3><small>${o}/${s.cards.length} cartes · badge ${BADGES[key][0]} ${done?"obtenu":"à gagner"}</small></div>
+          <div class="l"><h3>${esc(s.name)}</h3><small>${o}/${s.cards.length} cartes · badge « ${esc(BADGE.names(key))} » ${done?"obtenu":"à gagner"}</small></div>
           <div class="reward">${claimed?`<span class="pill got">Récompense récupérée</span>`:
             done?`<button class="btn sm" data-claim="${key}">Récupérer le booster épique</button>`:
             `<span class="pill">Récompense : booster épique garanti</span>`}</div>
@@ -394,10 +403,17 @@ function openPack(i){
       <div><div class="kicker">Booster ${esc(p.src)}</div><h1>${esc(c.name)}</h1><p class="lede" style="margin-inline:auto">Touche les cartes pour les retourner.</p></div>
       <div class="reveal appear">${cards.map((k,j)=>`<button class="flip r-glow-${k.r}" id="flip-${j}" aria-label="Retourner la carte ${j+1}">
         <span class="inner"><span class="back"><span><b>POPITES</b></span></span>${cardHTML(c,k,{count:false,isNew:isNew[j]})}</span></button>`).join("")}</div>
-      ${completed.length?`<div class="toast">Sous-genre complété : ${completed.map(s=>`${BADGES[c.id+"-"+s.id][0]} ${esc(s.name)}`).join(", ")}. Nouveau badge dans ton profil, et ton booster épique t'attend dans l'album.</div>`:""}
+      ${completed.length?`<div class="toast">Sous-genre complété : ${completed.map(s=>esc(s.name)).join(", ")}. Ton nouveau badge est dans l'écrin de ton profil, et ton booster épique t'attend dans l'album.</div>`:""}
       <div class="mactions"><button class="btn ghost" id="m-all">Tout retourner</button><button class="btn" id="m-close">Voir l'album</button></div>
     </div>`;
     m.querySelectorAll(".flip").forEach(f=>f.onclick=()=>f.classList.add("on"));
+    /* sous-genre complété grâce à ce booster : le badge se débloque, avec son animation, une fois les cartes retournées */
+    if(completed.length){
+      const shown=new Set(), unlock=()=>{const list=completed.filter(s=>!shown.has(s.id));list.forEach(s=>shown.add(s.id));
+        if(list.length) BADGE.debloquer(list.map(s=>({key:`${c.id}-${s.id}`,name:s.name})))};
+      const watch=setInterval(()=>{if(!m.isConnected||m.hidden){clearInterval(watch);return}
+        if([...m.querySelectorAll(".flip")].every(f=>f.classList.contains("on"))){clearInterval(watch);setTimeout(unlock,900)}},300);
+    }
     $("#m-all").onclick=()=>m.querySelectorAll(".flip").forEach((f,j)=>setTimeout(()=>f.classList.add("on"),j*140));
     $("#m-close").onclick=()=>{m.hidden=true;m.innerHTML="";curCol=c.id;view="album";render();window.scrollTo(0,0)};
   }
@@ -469,9 +485,10 @@ function renderProfile(){
         <div class="pstat"><b>${S.stats.quizWon}</b><span>quiz réussis</span></div>
       </div>
     </section>
-    ${COLLECTIONS.map(c=>`<section class="panel"><h2>${esc(c.name)}</h2><div class="badges">${subs.filter(x=>x.c===c).map(({s,key,done})=>{const [ic,bn]=BADGES[key];
-      return `<div class="bdg ${done?"":"off"}" style="--h:${c.hue}" aria-label="Badge ${esc(bn)}, ${done?"obtenu":"verrouillé"}">
-        <span class="ic" aria-hidden="true">${ic}</span><span class="bn">${esc(bn)}</span><span class="bs">${esc(s.name)} · ${ownedIn(s.cards)}/${s.cards.length}</span></div>`}).join("")}</div></section>`).join("")}
+    <section class="panel" id="p-ecrin" aria-label="Écrin des badges">
+      <h2>Mes badges</h2>
+      ${BADGE.ecrin(COLLECTIONS.map(c=>({name:c.name,subs:c.subs.map(s=>({key:`${c.id}-${s.id}`,name:s.name,own:ownedIn(s.cards),total:s.cards.length}))})))}
+    </section>
     <section class="panel">
       <h2>Mes amis</h2>
       <p>Partage ton profil (pseudo, badges, avancement) à tes amis : ils t'ajoutent en ouvrant ton lien. Renvoie-le quand tu progresses, ta fiche se met à jour chez eux.</p>
@@ -492,6 +509,7 @@ function renderProfile(){
       <p class="note">Importer remplace la collection de cet appareil.</p>
     </section>
   </div>`;
+  BADGE.bind($("#p-ecrin"));                       // badges gagnés : ils s'inclinent ; verrouillés : le cadenas tremble
   $("#pseudo").value=S.pseudo||"";
   $("#pseudo-ok").onclick=()=>{S.pseudo=$("#pseudo").value.trim().slice(0,24);save();render()};
   const showCode=()=>{const t=$("#sv-code");t.value=exportCode();t.hidden=false;$("#sv-copyrow").hidden=false;t.select();return t.value};
@@ -558,7 +576,7 @@ function friendHTML(f){
   return `<article class="friend">
     <div class="fhead"><div><b>${esc(f.p)}</b><span class="note"> · ${friendPct(f)} % de l'album · mis à jour le ${date}</span></div>
       <button class="btn ghost sm" data-unfriend="${esc(f.pid)}">Retirer</button></div>
-    <div class="fbadges">${badges.length?badges.map(k=>`<span title="${esc(BADGES[k][1])}">${BADGES[k][0]}</span>`).join(""):`<span class="note">Aucun badge pour l'instant</span>`}</div>
+    <div class="fbadges">${badges.length?badges.map(k=>{const [cid,sid]=k.split("-"),s=colById(cid).subs.find(x=>x.id===sid);return `<span title="${esc(s.name)}">${BADGE.svg(k,s.name,false)}</span>`}).join(""):`<span class="note">Aucun badge pour l'instant</span>`}</div>
     ${COLLECTIONS.map(c=>{const fp=friendCat(f,c), mp=pctOf(ownedIn(c.all),c.all.length);return `<details class="fcat"><summary><span>${esc(c.name)}</span><span class="prog"><i style="width:${fp}%"></i></span><span class="n">${fp} %</span></summary>
       <div class="fsubs">${c.subs.map(x=>{const v=f.s[`${c.id}-${x.id}`]||[0,0];return `<div><span>${esc(x.name)}</span><span class="n">${pctOf(v[0],v[1])} %</span><span class="n me">toi ${pctOf(ownedIn(x.cards),x.cards.length)} %</span></div>`}).join("")}
       <div class="note">Toi sur ${esc(c.name)} : ${mp} %</div></div></details>`}).join("")}
