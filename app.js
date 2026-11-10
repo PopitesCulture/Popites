@@ -406,15 +406,18 @@ function openPack(i){
       ${completed.length?`<div class="toast">Sous-genre complété : ${completed.map(s=>esc(s.name)).join(", ")}. Ton nouveau badge est dans l'écrin de ton profil, et ton booster épique t'attend dans l'album.</div>`:""}
       <div class="mactions"><button class="btn ghost" id="m-all">Tout retourner</button><button class="btn" id="m-close">Voir l'album</button></div>
     </div>`;
-    m.querySelectorAll(".flip").forEach(f=>f.onclick=()=>f.classList.add("on"));
+    /* retourner une carte ; rare, épique, légendaire ou Popites : des confettis de sa couleur (et une vague en fond pour les plus rares) */
+    const turn=f=>{if(f.classList.contains("on"))return;f.classList.add("on");const r=(f.className.match(/r-glow-(\w+)/)||[])[1];
+      setTimeout(()=>{FOND.confettis(f,r);if(r==="L"||r==="P")FOND.vague()},280)};
+    m.querySelectorAll(".flip").forEach(f=>f.onclick=()=>turn(f));
     /* sous-genre complété grâce à ce booster : le badge se débloque, avec son animation, une fois les cartes retournées */
     if(completed.length){
       const shown=new Set(), unlock=()=>{const list=completed.filter(s=>!shown.has(s.id));list.forEach(s=>shown.add(s.id));
-        if(list.length) BADGE.debloquer(list.map(s=>({key:`${c.id}-${s.id}`,name:s.name})))};
+        if(list.length){BADGE.debloquer(list.map(s=>({key:`${c.id}-${s.id}`,name:s.name})));FOND.vague()}};
       const watch=setInterval(()=>{if(!m.isConnected||m.hidden){clearInterval(watch);return}
         if([...m.querySelectorAll(".flip")].every(f=>f.classList.contains("on"))){clearInterval(watch);setTimeout(unlock,900)}},300);
     }
-    $("#m-all").onclick=()=>m.querySelectorAll(".flip").forEach((f,j)=>setTimeout(()=>f.classList.add("on"),j*140));
+    $("#m-all").onclick=()=>m.querySelectorAll(".flip").forEach((f,j)=>setTimeout(()=>turn(f),j*140));
     $("#m-close").onclick=()=>{m.hidden=true;m.innerHTML="";curCol=c.id;view="album";render();window.scrollTo(0,0)};
   }
 }
