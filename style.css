@@ -10,6 +10,37 @@
   --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
   --f-title:"Alfa Slab One",Georgia,serif;
   --f-logo:"Bungee","Arial Black",sans-serif;
+  --overlay:rgba(8,6,14,.9); --ombre:rgba(0,0,0,.35);
+  --onde-g:linear-gradient(115deg,#ff3b3b,#ff9a1a 16%,#ffe14a 32%,#36e07f 48%,#3b8bff 64%,#9a5cff 80%,#ff5fb0);
+  --onde-f:drop-shadow(0 7px 5px rgba(0,0,0,.75)) drop-shadow(0 0 6px rgba(255,255,255,.3));
+  --decor-op:.055;
+}
+/* Mode clair : suit le téléphone (Auto), ou forcé dans le Profil (data-theme sur <html>).
+   Papier crème légèrement lilas, panneaux blancs ; l'or devient plus foncé pour rester lisible sur blanc,
+   l'arc-en-ciel de l'onde plus saturé ; les objets (cartes, paquets, écrin) gardent leurs couleurs. */
+:root[data-theme="light"]{
+  color-scheme: light;
+  --bg:#f7f4fb; --surface:#ffffff; --surface2:#efe9f8; --line:#dcd4ea;
+  --fg:#1c1729; --muted:#675f7d; --accent:#e6a700; --accent-ink:#241a00;
+  --ok:#17935c; --bad:#d9364a;
+  --r-C:#8d8aa0; --r-PU:#2aa772; --r-R:#2f74f0; --r-E:#9b45ef; --r-L:#e89a00;
+  --overlay:rgba(247,244,251,.94); --ombre:rgba(40,25,70,.22);
+  --onde-g:linear-gradient(115deg,#e3122a,#f06a00 16%,#e0b000 32%,#0fae55 48%,#1a62e6 64%,#7a2fe8 80%,#e02a8a);
+  --onde-f:drop-shadow(0 6px 4px rgba(40,20,80,.35));
+  --decor-op:.08;
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    color-scheme: light;
+    --bg:#f7f4fb; --surface:#ffffff; --surface2:#efe9f8; --line:#dcd4ea;
+    --fg:#1c1729; --muted:#675f7d; --accent:#e6a700; --accent-ink:#241a00;
+    --ok:#17935c; --bad:#d9364a;
+    --r-C:#8d8aa0; --r-PU:#2aa772; --r-R:#2f74f0; --r-E:#9b45ef; --r-L:#e89a00;
+    --overlay:rgba(247,244,251,.94); --ombre:rgba(40,25,70,.22);
+    --onde-g:linear-gradient(115deg,#e3122a,#f06a00 16%,#e0b000 32%,#0fae55 48%,#1a62e6 64%,#7a2fe8 80%,#e02a8a);
+    --onde-f:drop-shadow(0 6px 4px rgba(40,20,80,.35));
+    --decor-op:.08;
+  }
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -70,7 +101,7 @@ h3{font-size:17px}
 
 /* carte : de l'arrière vers l'avant, le dégradé et le symbole, l'année, le personnage détouré, le texte ;
    seul le tour de la carte prend la couleur de la rareté (arc-en-ciel pour la Popites) */
-.card{--fr:var(--r-C);position:relative;aspect-ratio:5/7;max-width:100%;border-radius:12px;padding:3.2%;background:var(--fr);box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.card{--fr:var(--r-C);position:relative;aspect-ratio:5/7;max-width:100%;border-radius:12px;padding:3.2%;background:var(--fr);box-shadow:0 6px 18px var(--ombre)}
 .card.r-PU{--fr:var(--r-PU)} .card.r-R{--fr:var(--r-R)} .card.r-E{--fr:linear-gradient(140deg,#d08bff,#7d3cff 55%,#d08bff)} .card.r-L{--fr:linear-gradient(140deg,#ffe07a,#ff8a1f 50%,#ffd04a)}
 .card.r-P{--fr:conic-gradient(from 210deg,#ff3b3b,#ff9a1a,#ffe14a,#36e07f,#3b8bff,#9a5cff,#ff5fb0,#ff3b3b)}
 .card .in{container-type:inline-size;position:relative;height:100%;border-radius:9px;overflow:hidden;background:var(--g);color:var(--ink)}
@@ -192,7 +223,7 @@ h3{font-size:17px}
 .empty{margin-top:24px;padding:28px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);text-align:center}
 
 /* ouverture */
-.modal{position:fixed;inset:0;z-index:20;background:rgba(8,6,14,.9);backdrop-filter:blur(6px);overflow-y:auto;padding-top:calc(24px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.modal{position:fixed;inset:0;z-index:20;background:var(--overlay);backdrop-filter:blur(6px);overflow-y:auto;padding-top:calc(24px + env(safe-area-inset-top,0px));padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .mbox{max-width:980px;margin:0 auto;display:grid;gap:20px;justify-items:center;text-align:center}
 .reveal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;width:100%}
 @media (max-width:700px){.reveal{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -368,18 +399,23 @@ svg.secoue .cadenas{animation:secoue .5s ease-in-out}
 .confettis i{position:absolute;display:block;will-change:transform,opacity}
 /* papier peint d'icônes, toujours là, très discret ; une onde arc-en-ciel le balaie en battement de cœur (fond.js) */
 .decor{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
-.decor-base{position:absolute;inset:0;background-image:var(--tuile);background-size:260px 260px;opacity:.055}
+.decor-base{position:absolute;inset:0;background:var(--fg);-webkit-mask:var(--tuile) 0 0/260px 260px repeat;mask:var(--tuile) 0 0/260px 260px repeat;opacity:var(--decor-op)}
 .decor-onde{position:absolute;inset:-10%;opacity:0;
-  background:linear-gradient(115deg,#ff3b3b,#ff9a1a 16%,#ffe14a 32%,#36e07f 48%,#3b8bff 64%,#9a5cff 80%,#ff5fb0);
+  background:var(--onde-g);
   -webkit-mask-image:var(--tuile),var(--crete);
   mask-image:var(--tuile),var(--crete);
   -webkit-mask-size:260px 260px,300% 100%;mask-size:260px 260px,300% 100%;
   -webkit-mask-repeat:repeat,no-repeat;mask-repeat:repeat,no-repeat;
   -webkit-mask-composite:source-in;mask-composite:intersect;
   -webkit-mask-position:0 0,100% 0;mask-position:0 0,100% 0;
-  transform:translateY(-7px);filter:drop-shadow(0 7px 5px rgba(0,0,0,.75)) drop-shadow(0 0 6px rgba(255,255,255,.3))}   /* les icônes allumées montent un peu, avec leur ombre : elles se soulèvent */
+  transform:translateY(-7px);filter:var(--onde-f)}   /* les icônes allumées montent un peu, avec leur ombre : elles se soulèvent */
 .decor-onde.bat{animation:onde 9s cubic-bezier(.4,.1,.5,.9) forwards}
 @keyframes onde{0%{opacity:1;-webkit-mask-position:0 0,100% 0;mask-position:0 0,100% 0}
   100%{opacity:1;-webkit-mask-position:0 0,0% 0;mask-position:0 0,0% 0}}
 @media (prefers-reduced-motion:reduce){.confettis{display:none}.decor-onde{display:none}}
 .modal>.mbox{position:relative;z-index:1}   /* les cartes du booster passent devant le papier peint */
+/* Profil : choix de l'apparence (Auto / Clair / Sombre) */
+.apparence{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:14px}
+.apparence .note{margin-right:6px}
+.seg{background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-weight:600;color:var(--muted)}
+.seg[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}

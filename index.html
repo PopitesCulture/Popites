@@ -5,7 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Popites – collectionne la pop culture</title>
 <meta name="description" content="Popites, le jeu de cartes gratuit et open source pour collectionner la pop culture : séries, mangas, musique et personnages.">
-<meta name="theme-color" content="#13111b">
+<meta name="theme-color" content="#13111b" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f4fb" media="(prefers-color-scheme: light)">
+<script>/* thème choisi dans le Profil (Auto = suit le téléphone), posé avant l'affichage pour éviter un flash */
+function popitesTheme(t){var h=document.documentElement;if(t==="light"||t==="dark")h.dataset.theme=t;else delete h.dataset.theme;
+  document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){if(t==="light"||t==="dark"){m.content=t==="light"?"#f7f4fb":"#13111b";m.removeAttribute("media")}else{m.content=m.dataset.c||m.content;m.media=m.dataset.m||m.media}})}
+document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.dataset.c=m.content;m.dataset.m=m.media});
+try{popitesTheme(localStorage.getItem("popites-theme"))}catch(e){}</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png">

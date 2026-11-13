@@ -471,6 +471,8 @@ function renderShop(){
 }
 
 /* ---------- Profil : pseudo, stats, badges de sous-genres ---------- */
+/* apparence : réglage propre à l'appareil, hors de la sauvegarde (un import ne le change pas) */
+function themeNow(){try{return localStorage.getItem("popites-theme")||"auto"}catch(e){return "auto"}}
 function renderProfile(){
   const all=COLLECTIONS.reduce((s,c)=>s+c.all.length,0), got=COLLECTIONS.reduce((s,c)=>s+ownedIn(c.all),0);
   const subs=COLLECTIONS.flatMap(c=>c.subs.map(s=>({c,s,key:`${c.id}-${s.id}`,done:ownedIn(s.cards)===s.cards.length})));
@@ -486,6 +488,9 @@ function renderProfile(){
         <div class="pstat"><b>${nb}/${subs.length}</b><span>badges</span></div>
         <div class="pstat"><b>${S.stats.opened}</b><span>boosters ouverts</span></div>
         <div class="pstat"><b>${S.stats.quizWon}</b><span>quiz réussis</span></div>
+      </div>
+      <div class="apparence" role="radiogroup" aria-label="Apparence"><span class="note">Apparence</span>
+        ${[["auto","Auto"],["light","Clair"],["dark","Sombre"]].map(([v,l])=>`<button type="button" class="seg" role="radio" data-theme-set="${v}" aria-checked="${(themeNow()===v)}">${l}</button>`).join("")}
       </div>
     </section>
     <section class="panel" id="p-ecrin" aria-label="Écrin des badges">
@@ -512,6 +517,10 @@ function renderProfile(){
       <p class="note">Importer remplace la collection de cet appareil.</p>
     </section>
   </div>`;
+  document.querySelectorAll("[data-theme-set]").forEach(b=>b.onclick=()=>{
+    const v=b.dataset.themeSet; try{v==="auto"?localStorage.removeItem("popites-theme"):localStorage.setItem("popites-theme",v)}catch(e){}
+    popitesTheme(v); document.querySelectorAll("[data-theme-set]").forEach(x=>x.setAttribute("aria-checked",x===b));
+  });
   BADGE.bind($("#p-ecrin"));                       // badges gagnés : ils s'inclinent ; verrouillés : le cadenas tremble
   $("#pseudo").value=S.pseudo||"";
   $("#pseudo-ok").onclick=()=>{S.pseudo=$("#pseudo").value.trim().slice(0,24);save();render()};
