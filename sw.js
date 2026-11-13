@@ -1,9 +1,10 @@
-﻿/* Service worker : garde le jeu sur l'appareil pour qu'il marche hors connexion.
+/* Service worker : garde le jeu sur l'appareil pour qu'il marche hors connexion.
    Changer VERSION à chaque mise en ligne pour que les joueurs reçoivent la nouvelle version. */
-const VERSION = "popites-v20";
+const VERSION = "popites-v21";
 /* tous les fichiers à la racine : l'envoi de dossiers par le site de GitHub marche mal */
 const SHELL = ["./", "index.html", "style.css", "app.js", "symboles.js", "paquet.js", "badges.js", "fond.js", "collections.js", "questions.js", "manifest.webmanifest",
-  "icon-192.png", "icon-512.png", "icon-maskable-512.png", "icon-180.png"];
+  "icon-192.png", "icon-512.png", "icon-maskable-512.png", "icon-180.png",
+  "police-alfa-slab-one-latin-ext.woff2", "police-alfa-slab-one-latin.woff2", "police-bungee-latin-ext.woff2", "police-bungee-latin.woff2", "police-dela-gothic-one-latin-ext.woff2", "police-dela-gothic-one-latin.woff2", "police-figtree-latin-ext.woff2", "police-figtree-latin.woff2", "police-jetbrains-mono-latin-ext.woff2", "police-jetbrains-mono-latin.woff2"];
 
 self.addEventListener("install", e => {
   /* cache:"reload" : on va chercher les fichiers sur le serveur, jamais dans le cache du navigateur
@@ -20,7 +21,7 @@ self.addEventListener("activate", e => {
 });
 
 /* fichiers du jeu : d'abord le cache (rapide, hors ligne), mise à jour en arrière-plan ;
-   polices Google : mises en cache au premier passage */
+   les polices sont dans le site lui-même (police-*.woff2), gardées avec le reste */
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   e.respondWith(caches.open(VERSION).then(async cache => {
