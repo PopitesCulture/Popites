@@ -436,3 +436,11 @@ svg.secoue .cadenas{animation:secoue .5s ease-in-out}
 .apparence .note{margin-right:6px}
 .seg{background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-weight:600;color:var(--muted)}
 .seg[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+/* Crédits photos : un volet par sous-genre, une ligne par photo */
+.credits{border-top:1px solid var(--line);padding:8px 0}
+.credits summary{cursor:pointer;font-weight:600}
+.credits summary .note{margin-left:6px}
+.credits ul{list-style:none;margin:8px 0 4px;padding:0;display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.credits li strong{color:var(--fg);font-weight:600}
+.credits a{color:var(--fg);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
+.credits a:hover{text-decoration-color:var(--accent)}

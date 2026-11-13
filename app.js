@@ -701,8 +701,9 @@ function renderInfo(){
         <li>Les informations sur les œuvres viennent de bases ouvertes (Wikidata, domaine public).</li>
         <li>Les chiffres de vues viennent des statistiques publiques de Wikipédia (Wikimedia).</li>
         <li>Les descriptions des personnages sont écrites pour le jeu, d'après les articles Wikipédia en français.</li>
-        <li>Aucune photo n'est utilisée sur les cartes.</li>
-        <li>Aucun logo, affiche ou dessin officiel : les personnages sont évoqués par leurs couleurs, jamais redessinés.</li>
+        ${PICS?`<li>Les photos des artistes sont des photos libres de Wikimedia Commons : auteur et licence sont indiqués sur chaque carte et dans les <a href="#" data-legal="credits" style="color:var(--accent)">crédits photos</a>.</li>
+        <li>Les images des séries, mangas et personnages appartiennent à leurs ayants droit, indiqués sur chaque carte (©). Sur simple demande d'un ayant droit, la carte est retirée.</li>`:`<li>Aucune photo n'est utilisée sur les cartes.</li>
+        <li>Aucun logo, affiche ou dessin officiel : les personnages sont évoqués par leurs couleurs, jamais redessinés.</li>`}
       </ul>
     </section>
     <section class="panel">
@@ -715,6 +716,7 @@ function renderInfo(){
       </ul>`}
       <p class="note">Une fois installé, le jeu s'ouvre en plein écran et marche même sans connexion.</p>
     </section></div>`;
+  bindLegalLinks($("#view"));
 }
 
 /* ---------- Contact, mentions légales, confidentialité, licence ---------- */
@@ -735,8 +737,9 @@ function renderLegal(){
         <li><strong>Éditeur :</strong> Popites est un site personnel, non professionnel et sans but lucratif. Comme le permet l'article 6, III, 2 de la loi pour la confiance dans l'économie numérique (LCEN), son éditeur a choisi de rester anonyme ; son identité est connue de l'hébergeur.</li>
         <li><strong>Directeur de la publication :</strong> l'éditeur du site, joignable à ${mail}.</li>
         <li><strong>Hébergeur :</strong> GitHub Pages, service de GitHub, Inc., 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis (github.com).</li>
-        <li><strong>Œuvres citées :</strong> les noms de séries, mangas, artistes et personnages appartiennent à leurs ayants droit. Ils sont cités à titre d'information, sans logo, image ni dessin officiel. Popites n'est lié à aucun d'eux.</li>
-        <li><strong>Un contenu te pose problème ?</strong> Écris à ${mail} : il sera corrigé ou retiré rapidement.</li>
+        ${PICS?`<li><strong>Œuvres citées :</strong> les noms et les images des séries, mangas et personnages appartiennent à leurs ayants droit, mentionnés sur chaque carte (©). Ils sont repris à titre d'information et d'hommage, dans un jeu gratuit. Popites n'est lié à aucun d'eux.</li>
+        <li><strong>Photos des artistes :</strong> photos sous licence libre (Creative Commons ou domaine public), venant de Wikimedia Commons ; auteur, licence et lien dans les <a href="#" data-legal="credits" style="color:var(--accent)">crédits photos</a>.</li>`:`<li><strong>Œuvres citées :</strong> les noms de séries, mangas, artistes et personnages appartiennent à leurs ayants droit. Ils sont cités à titre d'information, sans logo, image ni dessin officiel. Popites n'est lié à aucun d'eux.</li>`}
+        <li><strong>Un contenu te pose problème ?</strong> Écris à ${mail} : il sera corrigé ou retiré rapidement. ${PICS?"Un ayant droit qui demande le retrait d'une image ou d'une carte l'obtient sans discussion.":""}</li>
       </ul>
     </section>
     <section class="panel" id="legal-privacy">
@@ -745,7 +748,7 @@ function renderLegal(){
         <li><strong>Pas de compte, pas de pub, pas de statistiques de visite, pas de cookie.</strong></li>
         <li><strong>Ta partie reste sur ton appareil :</strong> collection, boosters, pseudo et liste d'amis sont enregistrés dans le stockage de ton navigateur. Rien n'est envoyé à Popites, qui n'a pas de serveur.</li>
         <li><strong>Code ami :</strong> il contient ton pseudo, un identifiant tiré au hasard et ta progression. Il ne quitte ton appareil que si tu le partages toi-même.</li>
-        <li><strong>Services extérieurs :</strong> comme tout site, l'hébergeur (GitHub) reçoit ton adresse IP quand tu ouvres le jeu ; les polices d'écriture viennent de Google Fonts, qui la reçoit aussi. Le signalement d'une question et le sondage passent par Framaforms (Framasoft, association française) : seules les réponses que tu écris y sont envoyées. Les sites de dons (Liberapay${KOFI_URL?", Ko-fi":""}) ne sont contactés que si tu cliques sur leur bouton.</li>
+        <li><strong>Services extérieurs :</strong> comme tout site, l'hébergeur (GitHub) reçoit ton adresse IP quand tu ouvres le jeu. Les polices d'écriture et les images sont sur le site lui-même : aucun autre service n'est appelé pour les afficher. Le signalement d'une question et le sondage passent par Framaforms (Framasoft, association française) : seules les réponses que tu écris y sont envoyées. Les sites de dons (Liberapay${KOFI_URL?", Ko-fi":""}) ne sont contactés que si tu cliques sur leur bouton.</li>
         <li><strong>Tout effacer :</strong> supprime les données du site dans les réglages de ton navigateur, ou désinstalle l'appli. Popites ne garde aucune copie.</li>
       </ul>
     </section>
@@ -754,16 +757,52 @@ function renderLegal(){
       <ul class="plain">
         <li><strong>Code :</strong> licence MIT. Tu peux le réutiliser, le modifier et le partager librement, en gardant la mention de la licence.</li>
         <li><strong>Données :</strong> Wikidata (domaine public, CC0) et statistiques de vues de Wikipédia (Wikimedia).</li>
+        <li><strong>Polices :</strong> Dela Gothic One, Figtree, JetBrains Mono, Alfa Slab One et Bungee, sous licence SIL Open Font License.</li>
+        ${PICS?`<li><strong>Photos des artistes :</strong> chacune garde sa propre licence, voir les <a href="#" data-legal="credits" style="color:var(--accent)">crédits photos</a>.</li>`:""}
       </ul>
-    </section></div>`;
+    </section>
+    ${PICS?creditsHTML():""}</div>`;
+  bindLegalLinks($("#view"));
+  const q=$("#cr-q");
+  if(q) q.oninput=()=>{const t=norm(q.value);let n=0;
+    document.querySelectorAll("#legal-credits li[data-n]").forEach(li=>{const ok=!t||li.dataset.n.includes(t);li.hidden=!ok;if(ok)n++});
+    document.querySelectorAll("#legal-credits details").forEach(d=>{const any=d.querySelector("li[data-n]:not([hidden])");d.hidden=!any;if(t)d.open=!!any});
+    $("#cr-n").textContent=t?`${n} résultat${n>1?"s":""}`:"";};
+}
+
+/* ---------- Crédits photos : chaque photo libre avec son auteur, sa licence et le lien vers l'original ---------- */
+const PICS=typeof CREDITS!=="undefined";   // credits.js arrive avec les images : avant, les anciens textes restent
+const norm=s=>s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+function licenceURL(l){
+  const m=l.match(/^CC (BY(?:-SA|-NC|-ND|-NC-SA|-NC-ND)?) (\d\.\d)(?: (\w\w))?$/i);
+  if(m) return `https://creativecommons.org/licenses/${m[1].toLowerCase()}/${m[2]}/${m[3]?m[3].toLowerCase()+"/":""}deed.fr`;
+  if(/^CC0/i.test(l)) return "https://creativecommons.org/publicdomain/zero/1.0/deed.fr";
+  return "";
+}
+function creditsHTML(){
+  const ext=`target="_blank" rel="noopener"`;
+  const groups=COLLECTIONS.flatMap(c=>c.subs.map(s=>({name:`${c.name} · ${s.name}`,cards:s.cards.filter(k=>k.img===2&&CREDITS[k.id]&&/^Photo :/.test(k.credit||""))}))).filter(g=>g.cards.length);
+  const total=groups.reduce((a,g)=>a+g.cards.length,0);
+  return `<section class="panel" id="legal-credits">
+      <h2>Crédits photos</h2>
+      <p>Les ${total} photos d'artistes viennent de <a href="https://commons.wikimedia.org" ${ext} style="color:var(--accent)">Wikimedia Commons</a>, sous licence libre ou dans le domaine public. Elles sont recadrées pour tenir sur les cartes, sans autre modification. Merci à leurs auteurs !</p>
+      <div class="row"><input type="search" id="cr-q" placeholder="Chercher un artiste ou un photographe" aria-label="Chercher dans les crédits" style="flex:1;min-width:200px"><span class="note" id="cr-n" aria-live="polite"></span></div>
+      ${groups.map(g=>`<details class="credits"><summary>${esc(g.name)} <span class="note">${g.cards.length}</span></summary><ul>${g.cards.map(k=>{
+        const [auteur,lic]=k.credit.replace(/^Photo :\s*/,"").split(" · ");
+        const lu=licenceURL(lic||""), file=CREDITS[k.id];
+        return `<li data-n="${esc(norm(k.title+" "+auteur))}"><strong>${esc(k.title)}</strong> : ${esc(auteur)}, ${lu?`<a href="${lu}" ${ext}>${esc(lic)}</a>`:esc(lic||"")} · <a href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file.replace(/ /g,"_"))}" ${ext}>voir l'original</a></li>`}).join("")}</ul></details>`).join("")}
+    </section>`;
 }
 
 /* ---------- Navigation & outils de test ---------- */
 document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{view=t.dataset.v;render();window.scrollTo(0,0)});
-document.querySelectorAll("[data-legal]").forEach(a=>a.onclick=e=>{
-  e.preventDefault();view="legal";render();
+/* liens vers la page « Contact et mentions légales » (pied de page, et liens dans les pages elles-mêmes) */
+function bindLegalLinks(root){root.querySelectorAll("[data-legal]").forEach(a=>a.onclick=e=>{
+  e.preventDefault();if(view!=="legal"){view="legal";render()}
   const s=document.getElementById("legal-"+a.dataset.legal);if(s)s.scrollIntoView();else window.scrollTo(0,0);
-});
+})}
+bindLegalLinks(document);
+if(!PICS){const f=document.querySelector('[data-legal="credits"]');if(f)f.hidden=true}
 $("#t-quiz").onclick=()=>{S.quizDone={};S.shop=null;S.express=null;S.free={stock:FREE_MAX,t:Date.now()};save();quiz=null;render()};
 /* minuteur du booster gratuit : met à jour le compteur, et la page quand un booster arrive */
 setInterval(()=>{
